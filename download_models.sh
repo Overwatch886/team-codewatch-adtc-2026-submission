@@ -8,13 +8,11 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE_DIR="$(dirname "$HERE")"
-MODELS_DIR="$WORKSPACE_DIR/models"
+MODELS_DIR="$HERE/model"
 
 # 1. Directories
 mkdir -p "$MODELS_DIR/audio/kokoro"
-mkdir -p "$MODELS_DIR/gliner2_quantized"
-mkdir -p "$WORKSPACE_DIR/answerai-colbert-small-v1"
+mkdir -p "$HERE/answerai-colbert-small-v1"
 
 # Helper download function
 download_file() {
@@ -55,22 +53,6 @@ download_file \
     "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin" \
     "$MODELS_DIR/audio/kokoro/voices-v1.0.bin"
 
-# 5. GLiner ONNX
-GLINER_FILES=(
-    "classifier_head.onnx"
-    "encoder.onnx"
-    "gliner4j_config.json"
-    "scoring_head.onnx"
-    "span_rep.onnx"
-    "tokenizer.json"
-    "tokenizer_config.json"
-)
-for file in "${GLINER_FILES[@]}"; do
-    download_file \
-        "https://huggingface.co/gravitee-io/gliner4j-gliner2-base-v1/resolve/main/$file" \
-        "$MODELS_DIR/gliner2_quantized/$file"
-done
-
 # 6. ColBERT ONNX
 COLBERT_FILES=(
     "config.json"
@@ -83,7 +65,7 @@ COLBERT_FILES=(
 for file in "${COLBERT_FILES[@]}"; do
     download_file \
         "https://huggingface.co/AnswerDotAI/answerai-colbert-small-v1/resolve/main/$file" \
-        "$WORKSPACE_DIR/answerai-colbert-small-v1/$file"
+        "$HERE/answerai-colbert-small-v1/$file"
 done
 
 echo "🎉 All supporting models downloaded successfully!"
