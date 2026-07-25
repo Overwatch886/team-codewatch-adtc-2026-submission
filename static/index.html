@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antigravity Local AI Assistant</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <i class="fa-solid fa-microchip logo-icon"></i>
+                <h2>Antigravity</h2>
+            </div>
+            
+            <div class="settings-section">
+                <h3>Settings</h3>
+                <div class="form-group">
+                    <label for="model-select"><i class="fa-solid fa-brain"></i> Active Model Mode</label>
+                    <select id="model-select" style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; outline: none; width: 100%;">
+                        <option value="auto">⚡ Auto (Smart Intent Routing)</option>
+                        <option value="granite">🎓 Granite 3.1 3B (Tutoring & Speed - 30 t/s)</option>
+                        <option value="qwen">💻 Qwen 2.5 Coder 3B (Expert Coding - 11 t/s)</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="temp-input"><i class="fa-solid fa-gauge"></i> Temp</label>
+                        <input type="number" id="temp-input" min="0" max="2" step="0.1" value="0.2">
+                    </div>
+                    <div class="form-group">
+                        <label for="tokens-input"><i class="fa-solid fa-arrow-right-to-bracket"></i> Max Tokens</label>
+                        <input type="number" id="tokens-input" min="64" max="4096" step="32" value="280">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="toggle-container">
+                        <span><i class="fa-solid fa-volume-high"></i> Text to Speech (TTS)</span>
+                        <div class="toggle-switch">
+                            <input type="checkbox" id="tts-toggle">
+                            <span class="toggle-slider"></span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="metrics-section">
+                <h3>System Metrics</h3>
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <span><i class="fa-solid fa-memory"></i> RAM Usage</span>
+                        <span id="ram-percentage">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="ram-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="metric-stats">
+                        <span id="ram-used">0.0 GB</span> / <span id="ram-total">0.0 GB</span>
+                    </div>
+                </div>
+                <div class="metric-card expandable" id="metrics-breakdown-card">
+                    <div class="metric-header" style="cursor: pointer; display: flex; justify-content: space-between; width: 100%;">
+                        <span><i class="fa-solid fa-server"></i> Memory Breakdown</span>
+                        <div class="metric-header-right" style="display: flex; align-items: center; gap: 8px;">
+                            <span id="memory-summary-header" style="font-size: 11px; color: var(--accent); font-weight: 600;">0.0 GB</span>
+                            <i class="fa-solid fa-chevron-down" id="chevron-icon" style="transition: transform 0.25s ease; font-size: 11px; color: var(--text-secondary);"></i>
+                        </div>
+                    </div>
+                    <div class="metric-breakdown-panel" id="breakdown-panel" style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px; font-size: 12px; transition: all 0.3s ease;">
+                        <div class="breakdown-item" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: var(--text-secondary);"><i class="fa-solid fa-microchip" style="margin-right: 4px; font-size: 10px;"></i> OS Baseline:</span>
+                            <span id="breakdown-os" style="font-weight: 500;">0.0 MB</span>
+                        </div>
+                        <div class="breakdown-item" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: var(--text-secondary);"><i class="fa-solid fa-microchip" style="margin-right: 4px; font-size: 10px; color: #34d399;"></i> Active Model Memory (<span id="breakdown-model-name">Granite 3.1 3B</span>):</span>
+                            <span id="breakdown-gpu" style="font-weight: 500;">0.0 MB</span>
+                        </div>
+                        <div class="breakdown-item" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: var(--text-secondary);"><i class="fa-solid fa-gears" style="margin-right: 4px; font-size: 10px;"></i> llama.cpp Engine:</span>
+                            <span id="breakdown-engine" style="font-weight: 500;">0.0 MB</span>
+                        </div>
+                        <div class="breakdown-item" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: var(--text-secondary);"><i class="fa-solid fa-bolt" style="margin-right: 4px; font-size: 10px;"></i> Prompt Cache:</span>
+                            <span id="breakdown-cache" style="font-weight: 500;">0.0 MB</span>
+                        </div>
+                        <div class="breakdown-item" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: var(--text-secondary);"><i class="fa-solid fa-eye" style="margin-right: 4px; font-size: 10px; color: #38bdf8;"></i> Vision Engine:</span>
+                            <span id="breakdown-vision" style="font-weight: 600; color: #38bdf8;">Idle (CPU - 0 VRAM)</span>
+                        </div>
+                        <div class="breakdown-item" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.04); padding-top: 4px;">
+                            <span style="color: var(--text-secondary);"><i class="fa-solid fa-magnifying-glass" style="margin-right: 4px; font-size: 10px;"></i> ColBERT Search:</span>
+                            <span id="breakdown-colbert" style="font-weight: 500;">0.0 MB</span>
+                        </div>
+                        <div class="breakdown-item" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: var(--text-secondary);"><i class="fa-solid fa-volume-high" style="margin-right: 4px; font-size: 10px;"></i> Kokoro TTS:</span>
+                            <span id="breakdown-kokoro" style="font-weight: 500;">0.0 MB</span>
+                        </div>
+                        <div class="breakdown-item" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: var(--text-secondary);"><i class="fa-solid fa-laptop-code" style="margin-right: 4px; font-size: 10px;"></i> Orchestrator:</span>
+                            <span id="breakdown-orchestrator" style="font-weight: 500;">0.0 MB</span>
+                        </div>
+                        <div class="breakdown-item" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.04); padding-top: 4px;">
+                            <span style="color: var(--text-secondary);"><i class="fa-solid fa-window-restore" style="margin-right: 4px; font-size: 10px;"></i> Other User Programs:</span>
+                            <span id="breakdown-other-user" style="font-weight: 500;">0.0 MB</span>
+                        </div>
+                        <div class="breakdown-item" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--border-color); padding-top: 6px; margin-top: 4px;">
+                            <span style="color: var(--text-primary); font-weight: 500;">Total Allocated:</span>
+                            <span id="breakdown-total" style="font-weight: 600; color: var(--accent);">0.0 MB</span>
+                        </div>
+                    </div>
+                </div>
+                <button id="refresh-metrics-btn" class="secondary-btn"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+
+            <div class="sidebar-footer">
+                <span class="status-indicator online"></span>
+                <span>Services Connected</span>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-area">
+            <header class="chat-header">
+                <div class="chat-header-title">
+                    <h1>Local Chat Orchestrator</h1>
+                    <div class="active-model-indicator" id="active-model-indicator" style="display: flex; align-items: center; gap: 6px; margin-top: 4px; padding: 3px 10px; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.25); border-radius: 20px; font-size: 11px; color: #34d399; font-weight: 500; width: fit-content;">
+                        <i class="fa-solid fa-graduation-cap" id="active-model-icon"></i>
+                        <span id="active-model-name-display">Granite 3.1 3B A800M (Tutoring & Guidance Mode)</span>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button id="clear-chat-btn" class="icon-btn" title="Clear Chat History">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Chat Messages Container -->
+            <div class="chat-messages" id="chat-messages">
+                <!-- Welcome Message -->
+                <div class="message assistant welcome">
+                    <div class="avatar"><i class="fa-solid fa-robot"></i></div>
+                    <div class="message-content-wrapper">
+                        <div class="message-header">
+                            <span class="sender-name">Antigravity CodeLab</span>
+                        </div>
+                        <div class="message-content">
+                            <p>Welcome to <strong>Antigravity CodeLab</strong> — your 100% offline AI Pair-Programmer & Socratic Coding Tutor.</p>
+                            <p>Choose an interactive mode or start asking questions:</p>
+                            <div class="quick-action-chips">
+                                <button type="button" class="action-chip" data-prompt="Help me build a URL shortener script step by step.">
+                                    <i class="fa-solid fa-graduation-cap"></i> 🎓 Step-by-Step Socratic Tutor
+                                </button>
+                                <button type="button" class="action-chip" data-prompt="Help me debug this error in my script: IndexError: list index out of range">
+                                    <i class="fa-solid fa-bug"></i> 🐛 Debug Traceback
+                                </button>
+                                <button type="button" class="action-chip" data-prompt="Review this code for performance, readability, and edge cases:">
+                                    <i class="fa-solid fa-code"></i> 💻 Code Review & Refactor
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Message Input Area -->
+            <footer class="chat-footer">
+                <form id="chat-form" class="chat-form">
+                    <!-- Preview strip for pending attachments -->
+                    <div id="attach-preview" class="attach-preview" style="display: none;"></div>
+                    <input type="file" id="attach-input" multiple
+                           accept="image/*,.pdf,.docx,.doc,.py,.js,.ts,.tsx,.jsx,.sh,.bash,.json,.yaml,.yml,.md,.txt,.html,.css,.c,.cpp,.h,.hpp,.java,.go,.rs,.rb,.php,.sql,.toml,.ini,.cfg,.log,.xml"
+                           style="display: none;">
+                    <div class="input-wrapper">
+                        <button type="button" id="attach-btn" class="input-action-btn" title="Attach code, documents, or screenshots">
+                            <i class="fa-solid fa-paperclip"></i>
+                        </button>
+                        <button type="button" id="mic-btn" class="input-action-btn" title="Toggle Interactive Voice Mode (Hands-Free Dictation)">
+                            <i class="fa-solid fa-microphone"></i>
+                        </button>
+                        <textarea id="chat-input" placeholder="Ask a coding question, attach scripts/docs/screenshots, or click 🎙️ for Voice Mode..." rows="1"></textarea>
+                        <button type="submit" id="send-btn" class="send-btn">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </form>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Script imports -->
+    <script src="/static/app.js?v=20260725_v16"></script>
+</body>
+</html>

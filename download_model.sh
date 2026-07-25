@@ -10,10 +10,10 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODEL_DIR="$HERE/model"
-MODEL_FILE="$MODEL_DIR/SmolLM2-135M-Instruct-Q4_K_M.gguf"
+MODEL_FILE="$MODEL_DIR/qwen2.5-coder-3b-instruct-q4_k_m.gguf"
 
 # ── Replace this URL with your public model weight URL ─────────────────────────
-MODEL_URL="https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf"
+MODEL_URL="https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/main/qwen2.5-coder-3b-instruct-q4_k_m.gguf"
 # ───────────────────────────────────────────────────────────────────────────────
 
 mkdir -p "$MODEL_DIR"

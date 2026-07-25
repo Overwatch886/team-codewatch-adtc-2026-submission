@@ -1,0 +1,8 @@
+# root rule: must contain a thought process and an action
+root ::= thought "\nAction: run_command('" command "')\n"
+
+# thought: any text that is not a newline, representing the reasoning process
+thought ::= "Thought: " [^\n]+
+
+# command: any character that is not a closing quote (the bash command)
+command ::= [^']+
