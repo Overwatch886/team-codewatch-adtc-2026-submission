@@ -732,6 +732,13 @@ General Rules:
 - Keep all explanations plain, clear, and beginner-friendly.
 - Never output raw meta-dialogues or system prompt labels."""
 
+STEP1_GBNF_GRAMMAR = """root ::= step1-header "\\n\\n" explanation "\\n\\n" task-header "\\n" task-body
+step1-header ::= "### 🛠️ Step 1: " [^\\n]+
+explanation ::= [^\\n]+ ("\\n" [^\\n]+)?
+task-header ::= "**Your Task**:"
+task-body ::= [^\\n]+ ("\\n" [^\\n]+)? ("\\n" [^\\n]+)?
+"""
+
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request):
     body = await request.json()
@@ -899,11 +906,7 @@ async def chat_completions(request: Request):
             stop_sequences = [stop_sequences]
 
         max_toks = int(body.get("max_tokens", 1024))
-        if "step by step" in query_text.lower() or "guide me" in query_text.lower() or "step-by-step" in query_text.lower():
-            stop_sequences.extend(["Step 2", "### Step 2", "Step 2:", "## Step 2", "\n\nStep 2", "\nStep 2", "Next, we", "Finally,", "Now, let", "\n\nNext"])
-            if "max_tokens" not in body or body.get("max_tokens") == 1024:
-                max_toks = 280
-
+        
         call_args = {
             "model": model_name,
             "messages": clean_messages,
@@ -912,6 +915,15 @@ async def chat_completions(request: Request):
             "max_tokens": max_toks,
             "stop": stop_sequences
         }
+
+        if "step by step" in query_text.lower() or "guide me" in query_text.lower() or "step-by-step" in query_text.lower():
+            # Use strict GBNF grammar constraint instead of fragile string stop sequences
+            call_args["grammar"] = STEP1_GBNF_GRAMMAR
+            if "max_tokens" not in body or body.get("max_tokens") == 1024:
+                call_args["max_tokens"] = 280
+
+        if "grammar" in body:
+            call_args["grammar"] = body["grammar"]
         
         # Forward penalty parameters if present
         for penalty in ["frequency_penalty", "presence_penalty", "repeat_penalty"]:
@@ -930,9 +942,16 @@ async def chat_completions(request: Request):
         if "response_format" in body:
             call_args["response_format"] = body["response_format"]
 
+        # Package non-standard llama.cpp extension parameters into extra_body for OpenAI SDK
+        extra_body = {}
+        if "grammar" in call_args:
+            extra_body["grammar"] = call_args.pop("grammar")
+        if extra_body:
+            call_args["extra_body"] = extra_body
+
         llm_response = orchestrator.client.chat.completions.create(**call_args)
     except Exception as e:
-        print(f"[Server Error] LiteLLM completion failed: {e}")
+        print(f"[Server Error] Model server completion failed: {e}")
         try:
             fail_dump_path = os.path.join(WORKSPACE_DIR, "scratch", "last_failed_request.json")
             with open(fail_dump_path, "w", encoding="utf-8") as df:
@@ -940,7 +959,7 @@ async def chat_completions(request: Request):
             print(f"[Server] Logged failed request payload to {fail_dump_path}")
         except Exception as dump_err:
             print(f"[Server] Failed to log failed request payload: {dump_err}")
-        raise HTTPException(status_code=500, detail=f"LiteLLM completion failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Model server completion failed: {e}")
 
     if stream:
         def event_generator():

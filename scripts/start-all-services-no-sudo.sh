@@ -13,7 +13,7 @@ sleep 1
 
 echo "🚀 Starting Granite 3.1 3B A800M Model Server (Port 8081)..."
 RADV_PERFTEST=nosam /home/overwatch886/local_ai_workspace/software/llama.cpp/build/bin/llama-server \
-  -m /home/overwatch886/local_ai_workspace/models/granite-3.1-3b-a800m-instruct-IQ4_XS.gguf \
+  -m /home/overwatch886/local_ai_workspace/code-persona-adtc-2026-submission/model/granite-3.1-3b-a800m-instruct-IQ4_XS.gguf \
   -c 4096 -b 2048 -ub 512 -t 4 \
   --port 8081 --threads-http 2 --parallel 1 --cache-ram 128 \
   -ctk q8_0 -ctv q8_0 \
