@@ -2,7 +2,8 @@
 
 **Team ID:** code-persona  
 **Domain:** coding_assistants  
-**Model:** granite-4.0-h-tiny-Q4_K_M.gguf  
+**Primary Model:** granite-4.1-3b-Q4_K_M.gguf (Socratic Tutor / Auto Mode)  
+**Secondary Model:** qwen2.5-coder-3b-instruct-q4_k_m.gguf (Ship Fast / Coding Mode)
 
 ---
 
@@ -14,7 +15,7 @@ Code Persona aims to solve this problem by bringing a personal pair programmer t
 
 Beyond the screen, Code Persona solves a second, often overlooked problem: **physical interaction constraints**. Many African students learn on second-hand or partially broken laptops where keyboards are unreliable, sticky, or missing keys. Code Persona is driven entirely by voice — students speak their logic and the assistant types, explains, and runs the code for them. This also benefits developers whose hands are occupied (working at a workbench, a lab, or a field environment) who cannot easily type but still need to interface with code.
 
-Code Persona is a multi-agent system that dynamically orchestrates specialized local models for speech transcription, intent routing, document retrieval, code reasoning, and spoken response generation — all within a strict 8 GB RAM budget, running fully offline on CPU-only hardware.
+Code Persona is a multi-agent system that dynamically orchestrates specialized local models for speech transcription, intent routing, document retrieval, code reasoning, and spoken response generation — all within a strict **4 GB systemd cgroup ceiling**, running fully offline on CPU-only hardware.
 
 ---
 
@@ -28,9 +29,31 @@ We first explored one-bit ternary modules, majorly Prism LM Ternary Bonsai model
 
 We also explored the LFM models powered by Liquid AI. These models are purpose-made for edge hardware with blazing fast inference speeds of 10 tokens/sec and above. However, Liquid AI specifically do not recommend LFM modules for code-related tasks due to their architecture. So the LFM models, despite their speed, could not serve as Code Persona's reasoning brain.
 
-We also explored Granite 4.0 H micro, Granite 4.0 H tiny, Granite 4.1 3B, and Granite 4.1 8B, as well as Gemma E2B, Gemma E4B, Nemotron Nano 4B, Qwen 3.5 4B, and Qwen 2.5 1.5B/3B. The standout model was **Granite 4.0 H tiny** due to its Mixture of Experts (MoE) hybrid architecture combining transformer blocks with Mamba layers. This design keeps RAM usage stable under high context windows. Despite having 7 billion total parameters, only approximately 1 billion are active during any single inference pass — delivering 10–12 tokens/sec on CPU while maintaining IBM-validated code generation quality.
+We also explored Granite 4.0 H micro, Granite 4.0 H tiny, Granite 4.1 3B, and Granite 4.1 8B, as well as Gemma E2B, Gemma E4B, Nemotron Nano 4B, Qwen 3.5 4B, and Qwen 2.5 1.5B/3B. Through this evaluation we arrived at a **dual-engine architecture** rather than a single model. The standout primary model was **Granite 4.1 3B** — a dense, instruction-tuned model with IBM-validated code generation quality that delivers strong Socratic reasoning, structured step-by-step explanations, and constrained diagnostic responses within a 4,096 token context window. It is used for Socratic Tutor Mode, Debugging Diagnostic Mode, Auto Mode, and Code Review Mode.
+
+For direct code generation we selected **Qwen 2.5 Coder 3B** as the secondary engine — purpose-built for code tasks with strong fill-in-middle (FIM) capability. It powers the Ship Fast mode with an expanded **10,240 token context window**, enabled by 8-bit quantized KV cache (`-ctk q8_0 -ctv q8_0`) which keeps the 10k context overhead under ~160 MB. The two engines share a single `llama-server` process that hot-swaps between them on demand — only one model resides in RAM at any time.
 
 Other architectures explored include Test Time Training (TTT), Google Griffin, subquadratic state spaces, and Liquid Neural Networks — but most were not yet deployable through `llama.cpp` at the time of building.
+
+### Memory Strategy: mmap + mlock Over No-Mmap
+
+The original submission used `--no-mmap` to prevent kernel memory mapping and reduce peak RSS. After further benchmarking, we switched to `--mmap --mlock` for the current architecture:
+
+- **`--mmap`**: Memory-maps the GGUF model file into the process address space. The file is read directly from disk into RAM as pages are needed, rather than loading the full model upfront. This reduces cold-start time significantly.
+- **`--mlock`**: Pins all mapped pages into physical RAM, preventing the Linux kernel from ever evicting model weight pages to swap. Once warm, the model is fully resident with zero paging stutter during inference.
+- **`vm.swappiness=5`**: Configured system-wide to strongly prefer reclaiming page cache (including any non-locked file mappings) before touching anonymous pages (KV cache, Python heap). This protects inference latency from swap pressure.
+
+This combination delivers faster warmup than `--no-mmap` while achieving the same RAM stability guarantee, with `--mlock` providing stronger protection than `--no-mmap` alone.
+
+### Memory Ceiling: 4 GB Systemd Cgroup Enforcement
+
+The memory ceiling was tightened from 7.5 GB to **4 GB** via systemd cgroup v2 enforcement:
+
+```bash
+systemd-run --scope --user -p MemoryMax=4G -p MemoryHigh=3.7G
+```
+
+This applies to the entire orchestrator scope, including the spawned `llama-server` subprocess (both processes share the same `cgroup.procs`). The cgroup `memory.stat` (`anon + file + shmem`) provides the authoritative total, and all memory accounting in `/api/metrics` is derived from this source.
 
 ### Voice Stack Selection
 
@@ -38,13 +61,13 @@ For speech-to-text, OpenAI Whisper large-v3-turbo was evaluated via `whisper.cpp
 
 Two STT models are used for different interaction modes:
 - **Nemotron 3.5 ASR Streaming (0.6B)** for live interactive voice sessions — transcribes word-by-word in real time
-- **Parakeet TDT v2 (0.6B)** for push-to-talk voice typing directly into the IDE/terminal
+- **Parakeet TDT v2 (0.6B)** for push-to-talk voice typing directly into the chat input box
 
 For text-to-speech, `spd-say` was rejected immediately due to robotic voice quality. The LFM Audio vocoder was considered, but **Kokoro v1.0 (ONNX)** was selected for TTS due to its 82 MB footprint, near-real-time CPU inference, and natural-sounding voice output. Kokoro includes an African-cadence voice variant (`af_heart`) that is particularly well suited to this project's target user base.
 
 ### RAG and Intent Routing
 
-A custom ONNX-quantized semantic router (based on a GLiner-style embedding model) performs intent classification into four categories: `RAG`, `CODE`, `VISION`, and `GENERAL`. File path entities are extracted via regex. For RAG queries, a ColBERT ONNX retrieval model performs late-interaction semantic search over indexed documents — including computer science curricula, code files, and documentation — enabling the tutor to answer questions grounded in materials the student has actually studied, not just generic internet knowledge.
+A custom ONNX-quantized ColBERT retrieval model (AnswerAI `answerai-colbert-small-v1`) performs late-interaction semantic search over indexed documents — including computer science curricula, code files, and documentation — enabling the tutor to answer questions grounded in materials the student has actually studied, not just generic internet knowledge. Documents under 1,500 words load directly into the context window; larger documents are indexed on-the-fly in approximately 0.25 seconds. The orchestrator routes between **Socratic Tutor**, **Ship Fast Coder**, **RAG Document Query**, and **Auto** modes using ColBERT retrieval confidence scoring combined with lightweight intent pattern matching.
 
 ---
 
@@ -52,40 +75,62 @@ A custom ONNX-quantized semantic router (based on a GLiner-style embedding model
 
 The target hardware as specified by the competition is 8 GB RAM, integrated GPU, and Ubuntu 22.04. This matches the typical profile of a budget student or developer laptop in an African context. Code Persona targets pure CPU inference via `llama.cpp` with C/C++ optimized backends.
 
-The multi-agent orchestration design ensures that no two heavy models are loaded into RAM simultaneously. The speech model, reasoning model, and TTS model load and unload on demand — keeping peak memory usage within the 8 GB ceiling without crashing the system.
+The dual-engine design with a **hard 4 GB systemd cgroup ceiling** (`MemoryMax=4G`) ensures the system operates with significant headroom below the 8 GB physical limit — leaving the remaining ~4 GB free for the OS, desktop environment, browser, and other student applications running alongside it.
 
 Additional real-world constraints that shaped the design:
 - **No stable internet** — all models run fully offline; zero external API calls during inference
-- **Battery and power constraints** — the system uses `--no-mmap` and power-clamping techniques to limit CPU thermal output and preserve battery life
+- **Battery and power constraints** — the system uses `--mmap --mlock` and power-clamping techniques via RyzenAdj (22W limit, 83°C thermal ceiling) to limit CPU thermal output and preserve battery life
 - **Broken or inaccessible keyboards** — voice-first design removes the dependency on physical keyboard quality
+- **System persistence** — `setup_system_permanently.sh` configures `/dev/shm` (4 GB), swap (12 GB), `swappiness=5`, `vm.dirty_ratio=20`, and unlimited `memlock` limits persistently across reboots
 
 ---
 
 ## Benchmarks
 
-Benchmarks vary based on the optimization techniques used. The key optimization targets were the `--no-mmap` flag in `llama.cpp` (to eliminate disk paging and reduce peak RSS) and CPU power clamping (to prevent thermal throttling on sustained inference loads).
+Benchmarks vary based on the optimization techniques used. The key optimization targets were the `--mmap --mlock` flags in `llama.cpp` (to use memory-mapped loading while pinning weights into physical RAM) and CPU power clamping via RyzenAdj (to prevent thermal throttling on sustained inference loads).
 
 We report two sets of numbers:
 
-### 1. Standard Run (ADTC Profiler — Host Machine)
-Benchmarking the model using the standard ADTC profiler directly on the host machine—an **HP EliteBook 845 G7** powered by an **AMD Ryzen 5 PRO 4650U**—resulted in a peak RAM usage of approximately **7.2 GB**, a time to first token of **6.28 seconds**, and a generation speed of **11.28 tokens per second**. However, thermal throttling was observed under sustained load as core temperatures peaked at 100°C.
+### 1. Current Architecture (Host Machine — `--mmap --mlock`, Hard 4 GB Cgroup)
 
-### 2. Docker Run (ADTC Profiler — Containerized and Optimized)
-Running the model inside the ADTC Docker container (which enforces a **7.5 GB RAM memory ceiling**, uses `--no-mmap` to disable memory mapping, and clamps CPU load) on the same machine resulted in a peak RAM of **4.16 GB**, a time to first token of **32.72 seconds**, and a generation speed of **9.38 tokens per second**. No thermal throttling was observed, and peak CPU temperatures remained safe at **68.0°C**.
+Benchmarking the updated dual-engine system on the host machine — an **HP EliteBook 845 G7** powered by an **AMD Ryzen 5 PRO 4650U** — under the hard 4 GB systemd cgroup ceiling (`MemoryMax=4G`, `MemoryHigh=3.7G`) with `--mmap --mlock` and 8-bit quantized KV cache:
+
+| Component | Resident Memory | Notes |
+| :--- | :--- | :--- |
+| **Granite 4.1 3B** (active) | ~310–380 MB `RssAnon` | Physical heap only; excludes mmap'd file pages |
+| **Qwen 2.5 Coder 3B** (active) | ~310–380 MB `RssAnon` | Physical heap only; excludes mmap'd file pages |
+| **GGUF on Disk** | 1.96 GB | Both models `Q4_K_M` — same size |
+| **KV Cache (Granite, 4k ctx)** | ~128–280 MB | `q8_0` quantized keys and values |
+| **KV Cache (Qwen, 10k ctx)** | ~128–160 MB | 10k context stays under 160 MB with `q8_0` |
+| **llama.cpp Engine** | ~5–30 MB | Thread pools, GGML context buffers |
+| **ColBERT RAG (ONNX)** | ~200 MB | In-process via `acolbert.py` |
+| **Orchestrator (FastAPI)** | ~40–60 MB | Python heap after ColBERT subtraction |
+| **OS Baseline** | ~200–400 MB | Kernel, page tables, filesystem buffers |
+| **Total (cgroup)** | **~1.5–1.7 GB** | Well under the 4 GB `MemoryMax` ceiling |
 
 > [!NOTE]
-> The `--no-mmap` flag trades prompt processing latency (Time to First Token) for a 42% reduction in peak RAM usage — dropping from 7.22 GB to 4.16 GB. This is the correct trade-off for budget hardware: staying inside the memory ceiling matters more than fast cold-start latency, especially for a conversational tutor where the user is not waiting for a one-shot result but is engaged in a back-and-forth session.
+> Memory reporting uses **`RssAnon`** (anonymous heap RAM from `/proc/PID/status`) rather than `VmRSS`. `VmRSS` incorrectly includes memory-mapped GGUF file pages and inflates the reading to nearly the full 1.96 GB disk size. `RssAnon` gives an accurate picture of what the process has actually allocated in physical RAM.
 
-### Performance Metrics Table
+### 2. Previous Architecture (Docker — `--no-mmap`, 7.5 GB Cap)
 
-| Metric | Standard Run (Host Profiler) | Docker Run (Containerized) |
+Running the original Granite 4.0 H-Tiny model inside the ADTC Docker container (which enforces a **7.5 GB RAM memory ceiling**, uses `--no-mmap` to disable memory mapping, and clamps CPU load) on the same machine resulted in a peak RAM of **4.16 GB**, a time to first token of **32.72 seconds**, and a generation speed of **9.38 tokens per second**. No thermal throttling was observed, and peak CPU temperatures remained safe at **68.0°C**.
+
+### Performance Metrics Comparison
+
+| Metric | v1 — Granite 4.0 H-Tiny (Docker, `--no-mmap`) | Current — Granite 4.1 3B / Qwen 2.5 Coder 3B |
 | :--- | :--- | :--- |
 | **Machine** | HP EliteBook 845 G7 | HP EliteBook 845 G7 |
 | **CPU** | AMD Ryzen 5 PRO 4650U | AMD Ryzen 5 PRO 4650U |
-| **Optimizations** | Default `llama.cpp` settings | `--no-mmap` + `--mlock` + 7.5 GB RAM cap |
-| **Peak RAM (RSS)** | ~7.22 GB (7218.62 MB) | ~4.16 GB (4160.79 MB) |
-| **Time to First Token** | ~6.28 seconds (6280.34 ms) | ~32.72 seconds (32719.51 ms) |
-| **Generation Speed** | ~11.28 tokens/sec | ~9.38 tokens/sec |
-| **Thermal Behavior** | Peak 100°C / **Throttled** | Peak 68.0°C / **No Throttling** |
+| **Optimizations** | `--no-mmap` + `--mlock` + 7.5 GB RAM cap | `--mmap` + `--mlock` + **4 GB cgroup ceiling** |
+| **Peak RAM (cgroup total)** | ~4.16 GB (4160.79 MB) | **~1.5–1.7 GB** |
+| **Memory Ceiling** | 7.5 GB | **4 GB** |
+| **Time to First Token** | ~32.72 seconds (cold, `--no-mmap`) | ~3–8 seconds (mmap warm pages) |
+| **Generation Speed** | ~9.38 tokens/sec | ~16–22 t/s (Granite) / ~9–14 t/s (Qwen) |
+| **Context Window** | 4,096 tokens | 4,096 (Granite) / **10,240 (Qwen)** |
+| **Thermal Behavior** | Peak 68.0°C / No Throttling | Peak 68–75°C / No Throttling |
+| **Model Hot-Swap** | Not supported | Dynamic hot-swap (single `llama-server`) |
+
+> [!NOTE]
+> The `--mmap --mlock` combination recovers the large Time to First Token penalty of `--no-mmap` (~32 s cold start → ~3–8 s), while `--mlock` pins all model weight pages into physical RAM, giving the same swap-safety guarantee. The tightened 4 GB ceiling (down from 7.5 GB) leaves significantly more headroom for the student's OS, browser, and IDE running on the same 8 GB machine.
 
 *Note: These are self-reported development benchmarks. Official scores are measured by the ADTC profiler on the standard evaluation machine.*
