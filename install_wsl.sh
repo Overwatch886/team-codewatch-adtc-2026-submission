@@ -85,17 +85,18 @@ fi
 
 # 6. Download ColBERT model
 echo -e "\n${BLUE}[6/11] Downloading ColBERT model...${NC}"
-mkdir -p "$WORKSPACE_DIR/models/answerai-colbert-small-v1"
-huggingface-cli download answerdotai/answerai-colbert-small-v1 --local-dir "$WORKSPACE_DIR/models/answerai-colbert-small-v1"
+mkdir -p "$WORKSPACE_DIR/model/answerai-colbert-small-v1"
+huggingface-cli download answerdotai/answerai-colbert-small-v1 --local-dir "$WORKSPACE_DIR/model/answerai-colbert-small-v1"
 
 # 7. Download Granite 4.1 3B model
 echo -e "\n${BLUE}[7/11] Downloading Granite 4.1 3B Q4_K_M model...${NC}"
-mkdir -p "$WORKSPACE_DIR/models"
-huggingface-cli download ibm-granite/granite-4.1-3b-instruct-GGUF granite-4.1-3b-instruct-Q4_K_M.gguf --local-dir "$WORKSPACE_DIR/models"
+mkdir -p "$WORKSPACE_DIR/model/granite"
+huggingface-cli download ibm-granite/granite-4.1-3b-instruct-GGUF granite-4.1-3b-Q4_K_M.gguf --local-dir "$WORKSPACE_DIR/model/granite"
 
 # 8. Download Qwen 2.5 Coder 3B model
 echo -e "\n${BLUE}[8/11] Downloading Qwen 2.5 Coder 3B Q4_K_M model...${NC}"
-huggingface-cli download Qwen/Qwen2.5-Coder-3B-Instruct-GGUF qwen2.5-coder-3b-instruct-q4_k_m.gguf --local-dir "$WORKSPACE_DIR/models"
+mkdir -p "$WORKSPACE_DIR/model/qwen"
+huggingface-cli download Qwen/Qwen2.5-Coder-3B-Instruct-GGUF qwen2.5-coder-3b-instruct-q4_k_m.gguf --local-dir "$WORKSPACE_DIR/model/qwen"
 
 # 9. Fix hardcoded paths
 echo -e "\n${BLUE}[9/11] Fixing hardcoded paths...${NC}"
@@ -139,7 +140,7 @@ echo -e "${GREEN}               INSTALLATION COMPLETE!               ${NC}"
 echo -e "${GREEN}====================================================${NC}"
 echo -e "To start LowaCode AI Tutor:"
 echo -e "  1. Run ${YELLOW}./start.sh${NC} from this WSL terminal"
-echo -e "  2. Open your Windows browser and go to ${BLUE}http://localhost:8000${NC}"
+echo -e "  2. Open your Windows browser and go to ${BLUE}http://localhost:8085${NC}"
 echo -e ""
 echo -e "${YELLOW}Note: Windows Defender may show a network prompt when the server starts.${NC}"
 echo -e "${YELLOW}Please click 'Allow' so you can access it from your browser.${NC}"
