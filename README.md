@@ -8,18 +8,17 @@ Code Persona (Antigravity CodeLab) is a 100% offline, privacy-first AI Pair Prog
 
 ## 🌟 Key Features & Capabilities
 
-- **🎙️ Interactive Hands-Free Voice Mode**: Speak your coding questions or logic; live speech is transcribed and auto-submitted, while Kokoro TTS speaks the response back aloud.
-- **🎓 3-Mode Socratic Mentorship**:
-  1. *Step-by-Step Tutor*: Outputs Step 1 + actionable task without full-code spoilers.
+- **🧠 Granite 4.0 H-Tiny Engine (`IQ4_XS` imatrix)**: Powered by IBM's hybrid Mamba/MoE architecture (3.3B parameters, 800M active), offering top-tier instruction following and linear context scaling under 8 GB RAM constraints.
+- **🔒 Focus Workstation & Distraction-Free Kiosk Mode**: Tailored for technical education environments; suspends desktop background bloat (`tracker-miner`, `snapd`), freeing 600MB - 1.2GB of RAM while helping students maintain 100% focus.
+- **🎙️ Parakeet TDT Push-to-Talk STT & User Review**: Speech is transcribed directly into the chat input box using Parakeet TDT, allowing users to review and edit their prompt before sending.
+- **🎓 3-Mode Socratic Mentorship (GBNF Grammar Constrained)**:
+  1. *Step-by-Step Tutor*: Outputs Step 1 + actionable task without full-code spoilers, constrained via GBNF grammar.
   2. *Traceback Diagnostic*: Explains Python/C/JS errors in plain English and gives hints.
   3. *Code Review & Refactoring*: Evaluates code readability, edge cases, and performance.
 - **📄 Adaptive Multi-Format Document Ingestion**: Attach `.py`, `.js`, `.json`, `.md`, `.txt`, `.docx` (Microsoft Word), or `.pdf` files.
   - Small files (≤ 1,500 words) dump directly into the context window.
   - Large files (> 1,500 words) are automatically indexed on-the-fly via ColBERT in ~0.25s.
-- **🧠 Dynamic Dual-Model Engine**:
-  - **Granite 3.1 3B A800M Instruct** (30 tokens/sec) for rapid Socratic tutoring & concepts.
-  - **Qwen 2.5 Coder 3B Instruct** (9.1 tokens/sec) for complex algorithms & data structures.
-- **⚙️ Real-Time 8GB VRAM Telemetry**: Tracks OS Baseline, Model VRAM, Kokoro TTS, and system RAM in real time.
+- **⚙️ Real-Time 8GB Telemetry & Memory Guard**: Tracks OS Baseline, Model RAM (`--mlock`), Kokoro TTS, and system memory in real time via `/api/metrics`.
 
 ---
 
@@ -27,7 +26,8 @@ Code Persona (Antigravity CodeLab) is a 100% offline, privacy-first AI Pair Prog
 
 ```
 code-persona-adtc-2026-submission/
-├── CODELAB_ARCHITECTURE.md   ← Complete system architecture & API guide
+├── docs/
+│   └── CODELAB_ARCHITECTURE.md ← Complete system architecture, GBNF rules & API guide
 ├── REPORT.md                  ← Detailed technical competition report & benchmarks
 ├── README.md                  ← Public repository documentation & usage guide
 ├── metadata.json              ← Required competition metadata & test prompts
@@ -37,6 +37,7 @@ code-persona-adtc-2026-submission/
 │   ├── orchestrator_server.py ← Local FastAPI Orchestrator, TTS & Teacher Prompt Manager
 │   ├── orchestrator.py        ← Query intent router & file context builder
 │   ├── start-all-services-no-sudo.sh ← Single launcher script
+│   ├── voice_type_parakeet.sh ← Push-to-talk STT transcription helper
 │   └── speak.py               ← Kokoro TTS helper script
 ├── static/
 │   ├── index.html             ← Modern Glassmorphism Web Dashboard & Voice Controls
@@ -63,22 +64,22 @@ bash scripts/start-all-services-no-sudo.sh
 ### 3. Open Web Dashboard
 Navigate to `http://localhost:8085` in your browser.
 
-- Click 🎙️ for **Hands-Free Interactive Voice Mode**.
+- Click 🎙️ for **Push-to-Talk Voice Dictation** (transcribes into input box for manual review).
 - Click **🎓 Step-by-Step Socratic Tutor** to start an interactive lesson.
 - Attach any `.pdf`, `.docx`, or `.py` file to ask questions about your documents offline.
 
 ---
 
-## 📊 Benchmarks & Hardware Optimization
+## 📊 Benchmarks & Memory Optimization
 
 Tested on **HP EliteBook 845 G7 (AMD Ryzen 5 PRO 4650U, 6.35 GiB usable RAM)**:
 
-| Engine | Generation Speed | Peak Memory | Use Case |
+| Engine | Quantization | Resident RAM | Generation Speed |
 | :--- | :--- | :--- | :--- |
-| **Granite 3.1 3B A800M** | **30.0 t/s** | 1.91 GB VRAM | Fast Chat, Socratic Tutoring, RAG |
-| **Qwen 2.5 Coder 3B** | **9.1 t/s** | 2.10 GB VRAM | Complex Algorithms & Data Structures |
-| **Kokoro TTS ONNX** | **Instant (0.3s)** | 340 MB (Auto-purged) | Spoken Audio Responses |
-| **ColBERT RAG** | **0.02s Search** | In-Memory (~50MB) | On-the-Fly Document Retrieval |
+| **Granite 4.0 H-Tiny** | `IQ4_XS` (imatrix) | **~2.5 GB - 3.5 GB** | **~28.6 t/s** (CPU Only, `--mlock`) |
+| **Qwen 2.5 Coder 3B** | `Q4_K_M` | **~2.1 GB** | **9.1 t/s** (Dense Code Specialist) |
+| **Kokoro TTS ONNX** | ONNX v1.0 | **340 MB** (Auto-purged) | Instant (0.3s audio latency) |
+| **ColBERT RAG** | ONNX Late-Interaction | **~50 MB** | **0.02s** Search latency |
 
 ---
 

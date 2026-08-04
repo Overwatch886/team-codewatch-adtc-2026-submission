@@ -1,98 +1,297 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -e
+set -u
 
-# setup_system_permanently.sh
-# Run this once with sudo to apply permanent LLM performance optimizations.
-# Usage: sudo ./setup_system_permanently.sh
+# ==============================================================================
+# LowaCode AI Tutor - System Performance Tuning Script
+# ==============================================================================
 
-if [ "$EUID" -ne 0 ]; then
-  echo "Please run as root (using sudo)."
-  exit 1
+# --- Colors and Output ---
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+log_step() { echo -e "\n${BLUE}=== [$step/$TOTAL_STEPS] $1 ===${NC}"; ((step++)); }
+
+step=1
+TOTAL_STEPS=6
+
+SUMMARY_CHANGED=()
+SUMMARY_SKIPPED=()
+
+add_changed() { SUMMARY_CHANGED+=("$1"); }
+add_skipped() { SUMMARY_SKIPPED+=("$1"); }
+
+# --- Pre-flight Checks ---
+if [[ $EUID -ne 0 ]]; then
+    log_error "This script must be run as root. Please use sudo."
+    exit 1
 fi
 
 REAL_USER=${SUDO_USER:-$USER}
-echo "Configuring permanent LLM optimizations for user: ${REAL_USER}"
-
-# ----------------------------------------------------
-# 2. Configure vm.swappiness = 10
-# ----------------------------------------------------
-echo "==> Configuring Swappiness..."
-cat <<EOF > /etc/sysctl.d/99-llm-swappiness.conf
-vm.swappiness=10
-EOF
-sysctl -p /etc/sysctl.d/99-llm-swappiness.conf
-echo "Swappiness set to 10."
-
-# ----------------------------------------------------
-# 3. Configure Unlimited Memlock (for --mlock)
-# ----------------------------------------------------
-echo "==> Configuring memlock limits..."
-LIMITS_FILE="/etc/security/limits.d/99-llm-memlock.conf"
-cat <<EOF > ${LIMITS_FILE}
-${REAL_USER} soft memlock unlimited
-${REAL_USER} hard memlock unlimited
-EOF
-echo "Unlimited memlock configured for ${REAL_USER} in ${LIMITS_FILE}."
-
-# ----------------------------------------------------
-# 4. Create Boot-Time Optimization Service (THP, CPU Governor, Zswap, Ryzenadj)
-# ----------------------------------------------------
-echo "==> Creating llm-system-tune systemd service..."
-
-# Create the helper script that runs at boot
-TUNE_SCRIPT="/usr/local/bin/llm-system-tune.sh"
-cat <<'EOF' > ${TUNE_SCRIPT}
-#!/bin/bash
-# CPU Governor -> Performance
-echo performance | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor >/dev/null
-
-# THP -> Madvise
-echo madvise | tee /sys/kernel/mm/transparent_hugepage/enabled >/dev/null
-
-# Disable Zswap (lets zRAM handle compression cleanly)
-#if [ -f /sys/module/zswap/parameters/enabled ]; then
-    #echo 0 | tee /sys/module/zswap/parameters/enabled >/dev/null
-#fi
-
-# Ryzenadj -> 18W limit & 84C thermal throttle ceiling (if installed)
-if command -v ryzenadj >/dev/null 2>&1; then
-    ryzenadj --stapm-limit=22000 --fast-limit=22000 --slow-limit=22000 --apu-slow-limit=22000 --tctl-temp=83 >/dev/null
+if [[ "$REAL_USER" == "root" ]]; then
+    log_warn "SUDO_USER is root. Memlock settings will be applied to root. It is recommended to run this via sudo from a normal user."
 fi
+
+# Detect WSL2
+IS_WSL2=false
+if grep -qi microsoft /proc/version; then
+    IS_WSL2=true
+    log_info "WSL2 environment detected. Skipping some hardware-specific optimizations."
+fi
+
+
+# --- Step 1: Shared Memory Increase to 4 GB ---
+log_step "Configuring Shared Memory (/dev/shm) to 4GB"
+
+current_shm=$(df -h /dev/shm | awk 'NR==2 {print $2}')
+log_info "Current /dev/shm size: $current_shm"
+
+if grep -q "tmpfs.*/dev/shm" /etc/fstab; then
+    if grep -q "size=4g" /etc/fstab; then
+        log_info "/dev/shm is already configured for 4GB in /etc/fstab"
+        add_skipped "Shared Memory (/dev/shm)"
+    else
+        sed -i 's|tmpfs[[:space:]]*/dev/shm.*|tmpfs /dev/shm tmpfs defaults,size=4g 0 0|' /etc/fstab
+        mount -o remount /dev/shm
+        log_success "/dev/shm size updated to 4GB in /etc/fstab"
+        add_changed "Shared Memory (/dev/shm)"
+    fi
+else
+    echo "tmpfs /dev/shm tmpfs defaults,size=4g 0 0" >> /etc/fstab
+    mount -o remount /dev/shm
+    log_success "/dev/shm entry added to /etc/fstab (4GB)"
+    add_changed "Shared Memory (/dev/shm)"
+fi
+
+new_shm=$(df -h /dev/shm | awk 'NR==2 {print $2}')
+log_info "New /dev/shm size: $new_shm"
+
+
+# --- Step 2: Swap Memory Increase to 12 GB ---
+log_step "Configuring Swap Memory to 12GB"
+
+if $IS_WSL2; then
+    log_warn "WSL2 detected: Custom swapfile approach is not supported directly in WSL."
+    log_info "To set swap, create/edit C:\\Users\\<USERNAME>\\.wslconfig in Windows:"
+    echo -e "${YELLOW}[wsl2]\nmemory=8GB\nswap=12GB${NC}"
+    add_skipped "Swap Memory (WSL2 requires manual Windows config)"
+else
+    DESIRED_SWAP_BYTES=$((12 * 1024 * 1024 * 1024))
+    needs_swap=true
+
+    if [[ -f /swapfile ]]; then
+        swap_size=$(stat -c "%s" /swapfile 2>/dev/null || echo 0)
+        if [[ $swap_size -ge $DESIRED_SWAP_BYTES ]]; then
+            log_info "Swap file /swapfile already exists and is >= 12GB."
+            needs_swap=false
+            add_skipped "Swap Memory (already >= 12GB)"
+        else
+            log_info "Existing /swapfile is smaller than 12GB. Removing it..."
+            if grep -q "/swapfile" /proc/swaps; then
+                swapoff /swapfile || true
+            fi
+            rm -f /swapfile
+        fi
+    fi
+
+    if $needs_swap; then
+        log_info "Creating 12GB /swapfile..."
+        if ! fallocate -l 12G /swapfile 2>/dev/null; then
+            log_warn "fallocate failed, falling back to dd (this will take a while)..."
+            dd if=/dev/zero of=/swapfile bs=1G count=12 status=progress
+        fi
+        
+        chmod 600 /swapfile
+        mkswap /swapfile
+        swapon /swapfile
+        log_success "12GB /swapfile created and activated."
+        add_changed "Swap Memory (12GB swapfile created)"
+    fi
+
+    if ! grep -q "/swapfile.*swap" /etc/fstab; then
+        echo "/swapfile none swap sw 0 0" >> /etc/fstab
+        log_success "Added /swapfile to /etc/fstab for persistence."
+    else
+        log_info "/swapfile is already in /etc/fstab."
+    fi
+    
+    current_swap=$(free -h | grep -i swap | awk '{print $2}')
+    log_info "Current Total Swap: $current_swap"
+fi
+
+
+# --- Step 3: Kernel VM Settings (Swappiness & Dirty Ratio) ---
+log_step "Configuring Kernel VM Settings"
+
+SYSCTL_CONF="/etc/sysctl.d/99-llm-vm.conf"
+update_sysctl=false
+
+check_and_set_sysctl() {
+    local key=$1
+    local expected=$2
+    local current
+    current=$(sysctl -n "$key" 2>/dev/null || echo "not_set")
+    
+    log_info "$key is currently $current"
+    if [[ "$current" != "$expected" ]]; then
+        sysctl -w "$key=$expected" >/dev/null
+        update_sysctl=true
+        add_changed "Kernel setting $key=$expected"
+    else
+        add_skipped "Kernel setting $key"
+    fi
+}
+
+# swappiness=5: strongly prefer reclaiming file cache (mmap'd model pages can be re-read from disk)
+# over swapping anonymous pages (KV cache, Python heap) which cause severe inference latency spikes.
+# Combined with --mlock in llama-server, model weights are pinned and won't be evicted at all.
+check_and_set_sysctl "vm.swappiness" "5"
+check_and_set_sysctl "vm.dirty_ratio" "20"
+check_and_set_sysctl "vm.dirty_background_ratio" "5"
+
+if $update_sysctl; then
+    cat > "$SYSCTL_CONF" <<EOF
+# LowaCode AI Tuning
+# swappiness=5: protect anonymous pages (KV cache) from swap; prefer dropping file cache
+vm.swappiness=5
+vm.dirty_ratio=20
+vm.dirty_background_ratio=5
 EOF
+    log_success "Persisted VM settings to $SYSCTL_CONF"
+fi
 
-chmod +x ${TUNE_SCRIPT}
 
-# Create the systemd service unit
-SERVICE_FILE="/etc/systemd/system/llm-system-tune.service"
-cat <<EOF > ${SERVICE_FILE}
+# --- Step 4: Unlimited Memlock ---
+log_step "Configuring Memlock Limits"
+
+LIMITS_CONF="/etc/security/limits.d/99-llm-memlock.conf"
+MEMLOCK_CHANGED=false
+
+if [[ -f "$LIMITS_CONF" ]] && grep -q "$REAL_USER.*memlock.*unlimited" "$LIMITS_CONF"; then
+    log_info "Memlock is already unlimited for user $REAL_USER in $LIMITS_CONF"
+    add_skipped "Memlock limits"
+else
+    cat > "$LIMITS_CONF" <<EOF
+$REAL_USER soft memlock unlimited
+$REAL_USER hard memlock unlimited
+EOF
+    log_success "Set unlimited memlock for $REAL_USER in $LIMITS_CONF"
+    add_changed "Memlock limits"
+fi
+
+
+# --- Step 5: CPU Governor & THP (madvise) ---
+log_step "Configuring CPU Governor and Transparent HugePages (THP)"
+
+if $IS_WSL2; then
+    log_info "Skipping CPU Governor and THP configuration in WSL2."
+    add_skipped "CPU Governor & THP (WSL2)"
+else
+    SERVICE_FILE="/etc/systemd/system/llm-sys-tune.service"
+    SERVICE_SCRIPT="/usr/local/bin/llm-sys-tune.sh"
+    
+    # Create the tuning script
+    cat > "$SERVICE_SCRIPT" <<'EOF'
+#!/usr/bin/env bash
+# Set THP to madvise
+if [[ -f /sys/kernel/mm/transparent_hugepage/enabled ]]; then
+    echo madvise > /sys/kernel/mm/transparent_hugepage/enabled
+fi
+
+# Set CPU governor to performance
+for governor in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+    if [[ -f "$governor" ]]; then
+        echo performance > "$governor"
+    fi
+done
+EOF
+    chmod +x "$SERVICE_SCRIPT"
+
+    # Create and enable the systemd service
+    cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=LLM Local Performance Tuning Service
+Description=LowaCode AI System Tuning (CPU Governor & THP)
 After=multi-user.target
 
 [Service]
 Type=oneshot
-ExecStart=${TUNE_SCRIPT}
+ExecStart=$SERVICE_SCRIPT
 RemainAfterExit=yes
-
-[Unit]
-After=systemd-zram-setup@zram0.service
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reload
-systemctl enable --now llm-system-tune.service
-echo "llm-system-tune service enabled and running."
+    systemctl daemon-reload
+    if systemctl is-enabled --quiet llm-sys-tune.service 2>/dev/null; then
+        log_info "CPU Governor & THP service already enabled."
+        systemctl start llm-sys-tune.service
+        add_skipped "CPU Governor & THP service"
+    else
+        systemctl enable --now llm-sys-tune.service
+        log_success "CPU Governor & THP service created and started."
+        add_changed "CPU Governor & THP service"
+    fi
+fi
 
-# ----------------------------------------------------
-# 5. Flush memory cache right now
-# ----------------------------------------------------
-echo "==> Dropping memory caches..."
-sync && echo 3 > /proc/sys/vm/drop_caches
-echo "Memory caches dropped."
 
-echo "===================================================="
-# Check if running in desktop environment or shell to advice reboot
-echo "Optimizations successfully applied!"
-echo "Please LOG OUT and LOG BACK IN (or reboot) for memlock limits to take effect."
-echo "===================================================="
+# --- Step 6: RyzenAdj Power Limit ---
+log_step "Configuring RyzenAdj (Optional)"
+
+if $IS_WSL2; then
+    log_info "Skipping RyzenAdj configuration in WSL2."
+    add_skipped "RyzenAdj (WSL2)"
+else
+    if command -v ryzenadj &> /dev/null; then
+        log_info "RyzenAdj found. Attempting to set power limits..."
+        # Wrap in a safe check
+        if ryzenadj --stapm-limit=45000 --fast-limit=45000 --slow-limit=45000 >/dev/null 2>&1; then
+            log_success "RyzenAdj power limits applied successfully."
+            add_changed "RyzenAdj limits"
+        else
+            log_warn "RyzenAdj failed to apply limits (this is normal on some hardware/kernels)."
+            add_skipped "RyzenAdj (failed to apply)"
+        fi
+    else
+        log_info "RyzenAdj not installed or not in PATH. Skipping."
+        add_skipped "RyzenAdj (Not found)"
+    fi
+fi
+
+
+# --- Final Summary ---
+echo -e "\n${BLUE}==============================================================================${NC}"
+echo -e "${BLUE}                           Tuning Summary                                     ${NC}"
+echo -e "${BLUE}==============================================================================${NC}"
+
+echo -e "\n${GREEN}Changes Applied:${NC}"
+if [[ ${#SUMMARY_CHANGED[@]} -eq 0 ]]; then
+    echo "  None"
+else
+    for item in "${SUMMARY_CHANGED[@]}"; do
+        echo "  - $item"
+    done
+fi
+
+echo -e "\n${YELLOW}Skipped / Already Configured:${NC}"
+if [[ ${#SUMMARY_SKIPPED[@]} -eq 0 ]]; then
+    echo "  None"
+else
+    for item in "${SUMMARY_SKIPPED[@]}"; do
+        echo "  - $item"
+    done
+fi
+
+echo -e "\n${BLUE}==============================================================================${NC}"
+log_info "System tuning complete."
+log_warn "Some settings (like memlock) require you to log out and log back in, or simply reboot."
+echo -e "${YELLOW}Please REBOOT your system for all changes to take full effect.${NC}\n"
+
+exit 0

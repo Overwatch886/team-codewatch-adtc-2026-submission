@@ -1,6 +1,6 @@
 # 🚀 Antigravity CodeLab Architecture & Product Guide
 
-**Antigravity CodeLab** is a 100% offline, privacy-first AI Pair-Programmer & Socratic Coding Tutor engineered specifically for 8GB system constraints.
+**Antigravity CodeLab** (Code Persona) is a 100% offline, privacy-first AI Pair-Programmer & Socratic Coding Tutor engineered specifically for 8GB system constraints.
 
 ---
 
@@ -11,7 +11,7 @@ Antigravity CodeLab provides three specialized, interactive pair-programming wor
 ### 1. 🎓 Step-by-Step Socratic Tutor Mode
 - **Purpose**: Interactive coding mentorship without full-code spoilers.
 - **Behavior**: Outputs ONLY Step 1 + **Your Task**, then pauses generation, forcing the user to write their code before moving forward.
-- **Hardware Optimization**: Enforces a strict 280-token generation budget + transition stop-sequences (`Step 2`, `Next, we`, `Finally,`).
+- **Hardware Optimization**: Enforces a strict token generation budget + GGML BNF (GBNF) Grammar constraints (`STEP1_GBNF_GRAMMAR`) at the `llama.cpp` inference engine layer to mathematically forbid the model from generating Step 2+ or trailing filler.
 
 ### 2. 🐛 Debugging & Traceback Diagnostic Mode
 - **Purpose**: Instant, plain-English error analysis for terminal tracebacks and broken scripts.
@@ -23,17 +23,25 @@ Antigravity CodeLab provides three specialized, interactive pair-programming wor
 
 ---
 
+## 🔒 Focus Workstation & Distraction-Free Kiosk Mode
+
+- **Educational Impact**: Designed for real-world African technical schools and budget hardware where background desktop bloat and browser tabs consume critical RAM.
+- **RAM Optimization**: Suspends background Linux daemons (`tracker-miner`, `snapd`, `packagekit`), freeing 600 MB - 1.2 GB of physical RAM.
+- **Memory Guard**: Enforces systemd cgroup bounds (`MemoryMax=7.5G`), keeping total system memory usage strictly safe inside the 8 GB ceiling.
+- **Student Focus**: Launches Code Persona in a clean, distraction-free kiosk window, helping technical students focus on learning without social media distractions.
+
+---
+
 ## 🎙️ Interactive Voice & Multimodal Features
 
 ### 🔊 Text-to-Speech (Kokoro ONNX v1.0)
-- **Model**: `Kokoro-82M` running via ONNX Runtime.
+- **Model**: `Kokoro-82M` (`af_heart` voice) running via ONNX Runtime.
 - **Spoken Code Verbalizer**: Automatically strips code fences and verbalizes symbols naturally (e.g., `def` -> "define", `()` -> "parentheses").
 - **Automatic Unloader**: Disabling TTS on the sidebar instantly purges the model from RAM via `gc.collect()`, freeing 340 MB back to the OS.
 
-### 🎙️ Hands-Free Interactive Voice Mode
-- **Web Speech API**: Click 🎙️ next to the input box to start hands-free voice dictation.
-- **Live Transcription & Auto-Submit**: Speech is transcribed live and automatically submitted when you finish speaking.
-- **Spoken Audio Loop**: Combined with Kokoro TTS for a 100% hands-free conversational dialogue loop.
+### 🎙️ Parakeet TDT Push-to-Talk STT & Manual User Review
+- **Engine**: Parakeet TDT Multilingual (`SBPN_multilingual_large_q8_0.gguf`).
+- **User Review & Edit**: Speech is transcribed directly into the text input box, allowing the user to inspect, edit, or add code before manually sending to the model.
 
 ### 📄 Adaptive Document & Image Ingestion
 - **Formats Supported**: `.py`, `.js`, `.ts`, `.json`, `.md`, `.txt`, `.docx` (Microsoft Word), `.pdf`, `.png`, `.jpg` (Vision).
@@ -42,20 +50,23 @@ Antigravity CodeLab provides three specialized, interactive pair-programming wor
 
 ---
 
-## 🧠 Dynamic Dual-Model Engine
+## 🧠 Reasoning Engine & Quantization Selection
 
-| Model | Specs | Primary Role |
+| Component | Choice | Specs & Performance |
 | :--- | :--- | :--- |
-| **Granite 3.1 3B A800M Instruct** | 3.3B total / 800M active (IQ4_XS, 1.7 GB disk) | **Speed & Tutoring (30 t/s)**: Fast Socratic tutoring, concept breakdowns, general chat. |
-| **Qwen 2.5 Coder 3B Instruct** | 3.1B dense parameters (Q4_K_M, 2.1 GB disk) | **Expert Code Specialist (9.1 t/s)**: Complex data structures (LRU caches), pointer math, 2D grid backtracking. |
+| **Primary Model** | **Granite 4.0 H-Tiny** | Hybrid Mamba/MoE (3.3B total / 800M active), linear context scaling. |
+| **Quantization** | **`IQ4_XS` (imatrix)** | 4-bit importance matrix calibration (~2.45 GB - 3.5 GB RAM footprint, ~28.6 t/s speed). |
+| **Memory Locking** | `--mlock` | Locks model weights into physical RAM, preventing Linux kernel swap stutters. |
+| **CPU Execution** | `-ngl 0` / Vulkan iGPU | 100% pure CPU execution, or Vulkan/GTT layer offloading (`-ngl 14`) when iGPU is available. |
+| **KV Cache** | `-ctk q8_0 -ctv q8_0` | 8-bit quantized context cache to minimize memory overhead under long contexts. |
 
 ---
 
 ## ⚙️ Hardware & VRAM Telemetry (8GB System Budget)
 
-- **Physical System RAM**: 6.35 GiB usable physical RAM.
-- **ZRAM State**: Permanently masked (`/dev/null`) to eliminate memory compression stutters.
-- **Real-Time Memory Breakdown**: Tracks OS Baseline, Active LLM VRAM, llama.cpp overhead, Kokoro TTS, and Orchestrator RSS in real time via `/api/metrics`.
+- **Physical System RAM**: 6.35 GiB usable physical RAM on budget 8 GB laptops.
+- **ZRAM State**: Permanently masked (`/dev/null`) to eliminate memory compression CPU overhead.
+- **Real-Time Memory Breakdown**: Tracks OS Baseline, Active LLM RAM (`granite_rss_mb`), llama.cpp overhead, Kokoro TTS, and Orchestrator RSS in real time via `/api/metrics`.
 
 ---
 
@@ -65,7 +76,7 @@ Antigravity CodeLab provides three specialized, interactive pair-programming wor
 - **Orchestrator & Web UI**: `http://localhost:8085` (FastAPI orchestrator)
 
 ### Key Endpoints:
-- `POST /v1/chat/completions`: Standard OpenAI-compatible completion endpoint with dynamic teacher prompt injection.
-- `POST /api/switch-model`: Swaps active model between Granite 3.1 3B and Qwen 2.5 Coder 3B dynamically.
+- `POST /v1/chat/completions`: Standard OpenAI-compatible completion endpoint with dynamic GBNF grammar constraints.
+- `POST /api/switch-model`: Swaps active model between Granite 4.0 H-Tiny and Qwen 2.5 Coder 3B dynamically.
 - `GET /api/metrics`: Returns detailed system VRAM, RAM, and breakdown metrics.
 - `POST /api/settings`: Toggles Kokoro TTS and triggers immediate memory unloader when disabled.

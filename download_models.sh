@@ -1,71 +1,119 @@
 #!/usr/bin/env bash
-# download_models.sh - Download supporting models for ASR, TTS, Router, and RAG.
+# download_models.sh — Download all supporting models for LowaCode AI Tutor.
+#
+# NOTE: The competition benchmark model is handled separately by download_model.sh.
+#       This script downloads everything else the system needs to run fully:
+#         • Granite 4.1 3B  (Socratic / Auto mode LLM)
+#         • Qwen 2.5 Coder 3B  (Ship Fast coding LLM)
+#         • ColBERT ONNX  (semantic search / RAG)
+#         • Kokoro TTS  (text-to-speech, optional)
+#         • Parakeet TDT ASR  (speech-to-text, optional)
 #
 # Rules:
-#   - Must be idempotent (safe to run multiple times).
-#   - Must download without any credentials (public URL only).
+#   - Idempotent (safe to run multiple times).
+#   - No credentials needed — all public URLs.
 
 set -euo pipefail
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MODELS_DIR="$HERE/model"
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
+info()    { echo -e "${CYAN}[download_models]${NC} $*"; }
+success() { echo -e "${GREEN}[✓]${NC} $*"; }
+skip()    { echo -e "${YELLOW}[→ skip]${NC} $*"; }
 
-# 1. Directories
-mkdir -p "$MODELS_DIR/audio/kokoro"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODEL_DIR="$HERE/model"
+
+mkdir -p "$MODEL_DIR/granite"
+mkdir -p "$MODEL_DIR/qwen"
+mkdir -p "$MODEL_DIR/audio/kokoro"
 mkdir -p "$HERE/answerai-colbert-small-v1"
 
-# Helper download function
+# ── Helper: direct URL download ────────────────────────────────────────────────
 download_file() {
-    local url="$1"
-    local dest="$2"
-    if [[ -f "$dest" ]]; then
-        echo "File already exists: $dest — skipping."
-        return 0
-    fi
-    echo "Downloading $url → $dest..."
+    local url="$1" dest="$2"
+    if [[ -f "$dest" ]]; then skip "$(basename "$dest") already exists."; return 0; fi
+    info "Downloading $(basename "$dest")…"
     if command -v curl > /dev/null 2>&1; then
         curl -L --fail --progress-bar -o "$dest.partial" "$url"
     elif command -v wget > /dev/null 2>&1; then
         wget -q --show-progress -O "$dest.partial" "$url"
     else
-        echo "Error: neither curl nor wget found" >&2
-        return 1
+        echo "Error: neither curl nor wget found" >&2; return 1
     fi
     mv "$dest.partial" "$dest"
+    success "$(basename "$dest") done."
 }
 
-# 2. Nemotron ASR
-download_file \
-    "https://huggingface.co/cstr/nemotron-3.5-asr-streaming-0.6b-GGUF/resolve/main/nemotron-3.5-asr-streaming-0.6b-q5_k.gguf" \
-    "$MODELS_DIR/audio/nemotron-3.5-asr-streaming-0.6b-q5_k.gguf"
+# ── Helper: HuggingFace download (cli preferred, URL fallback) ─────────────────
+hf_download() {
+    local repo="$1" file="$2" dest="$3"
+    if [[ -f "$dest" ]]; then skip "$(basename "$dest") already exists."; return 0; fi
+    info "Downloading $(basename "$dest") from HuggingFace (${repo})…"
+    HF_CLI=""
+    for c in "$HERE/venv/bin/huggingface-cli" "$HOME/.local/bin/huggingface-cli" \
+              "$(command -v huggingface-cli 2>/dev/null || true)"; do
+        [[ -x "$c" ]] && { HF_CLI="$c"; break; }
+    done
+    if [[ -n "$HF_CLI" ]]; then
+        "$HF_CLI" download "$repo" "$file" \
+            --local-dir "$(dirname "$dest")" --local-dir-use-symlinks False
+    else
+        download_file "https://huggingface.co/${repo}/resolve/main/${file}" "$dest"
+    fi
+    success "$(basename "$dest") ready."
+}
 
-# 3. Parakeet ASR
-download_file \
-    "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/tdt-0.6b-v2-q5_k.gguf" \
-    "$MODELS_DIR/audio/tdt-0.6b-v2-q5_k.gguf"
+echo ""
+echo "╔══════════════════════════════════════════════════════╗"
+echo "║        LowaCode AI Tutor — Model Downloader         ║"
+echo "╚══════════════════════════════════════════════════════╝"
+echo ""
 
-# 4. Kokoro TTS (FP32 model — optimized for AVX2 execution on Zen 2/Zen 3 CPUs without VNNI)
-download_file \
-    "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx" \
-    "$MODELS_DIR/audio/kokoro/kokoro-v1.0.onnx"
+# [1/5] Granite 4.1 3B Q4_K_M — Socratic Tutor / Auto mode
+info "[1/5] Granite 4.1 3B (Socratic Tutor / Auto mode)"
+hf_download \
+    "ibm-granite/granite-4.1-3b-instruct-GGUF" \
+    "granite-4.1-3b-Q4_K_M.gguf" \
+    "$MODEL_DIR/granite/granite-4.1-3b-Q4_K_M.gguf"
 
-download_file \
-    "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin" \
-    "$MODELS_DIR/audio/kokoro/voices-v1.0.bin"
+# [2/5] Qwen 2.5 Coder 3B Q4_K_M — Ship Fast coding mode
+info "[2/5] Qwen 2.5 Coder 3B (Ship Fast / coding mode)"
+hf_download \
+    "Qwen/Qwen2.5-Coder-3B-Instruct-GGUF" \
+    "qwen2.5-coder-3b-instruct-q4_k_m.gguf" \
+    "$MODEL_DIR/qwen/qwen2.5-coder-3b-instruct-q4_k_m.gguf"
 
-# 6. ColBERT ONNX
-COLBERT_FILES=(
-    "config.json"
-    "model_int8.onnx"
-    "special_tokens_map.json"
-    "tokenizer.json"
-    "tokenizer_config.json"
-    "vocab.txt"
-)
-for file in "${COLBERT_FILES[@]}"; do
+# [3/5] ColBERT ONNX — semantic RAG search
+info "[3/5] ColBERT ONNX (answerai-colbert-small-v1)"
+for f in config.json model_int8.onnx special_tokens_map.json \
+          tokenizer.json tokenizer_config.json vocab.txt; do
     download_file \
-        "https://huggingface.co/AnswerDotAI/answerai-colbert-small-v1/resolve/main/$file" \
-        "$HERE/answerai-colbert-small-v1/$file"
+        "https://huggingface.co/AnswerDotAI/answerai-colbert-small-v1/resolve/main/$f" \
+        "$HERE/answerai-colbert-small-v1/$f"
 done
 
-echo "🎉 All supporting models downloaded successfully!"
+# [4/5] Kokoro TTS — text-to-speech (optional)
+info "[4/5] Kokoro TTS v1.0"
+download_file \
+    "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx" \
+    "$MODEL_DIR/audio/kokoro/kokoro-v1.0.onnx"
+download_file \
+    "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin" \
+    "$MODEL_DIR/audio/kokoro/voices-v1.0.bin"
+
+# [5/5] Parakeet TDT — speech-to-text (optional)
+info "[5/5] Parakeet TDT ASR"
+download_file \
+    "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/tdt-0.6b-v2-q5_k.gguf" \
+    "$MODEL_DIR/audio/tdt-0.6b-v2-q5_k.gguf"
+
+echo ""
+echo "╔══════════════════════════════════════════════════════╗"
+echo "║  🎉  All supporting models downloaded!              ║"
+echo "║                                                      ║"
+echo "║  Next steps:                                         ║"
+echo "║    1. ./download_model.sh   (competition model)     ║"
+echo "║    2. ./install_linux.sh    (or install_wsl.sh)     ║"
+echo "║    3. ./start.sh            (launch server)         ║"
+echo "╚══════════════════════════════════════════════════════╝"
+echo ""

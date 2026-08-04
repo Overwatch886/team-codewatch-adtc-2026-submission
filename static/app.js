@@ -22,49 +22,66 @@ document.addEventListener("DOMContentLoaded", () => {
     const ramTotal = document.getElementById("ram-total");
     const memorySummaryHeader = document.getElementById("memory-summary-header");
     // Handle model mode selection from the left sidebar Settings panel
-    if (modelSelect) {
-        modelSelect.addEventListener("change", async (e) => {
-            const targetModel = e.target.value;
-            const activeDisplay = document.getElementById("active-model-name-display");
-            const activeIcon = document.getElementById("active-model-icon");
+    async function switchSessionMode(targetModel) {
+        const activeDisplay = document.getElementById("active-model-name-display");
+        const activeIcon = document.getElementById("active-model-icon");
+        if (modelSelect) modelSelect.value = targetModel;
 
-            if (activeDisplay) {
-                activeDisplay.textContent = "Swapping model server...";
-            }
-            if (activeIcon) {
-                activeIcon.className = "fa-solid fa-arrows-rotate fa-spin";
-            }
-
-            try {
-                const res = await fetch("/api/switch-model", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ model: targetModel })
-                });
-                const data = await res.json();
-
-                if (data.status === "ok") {
-                    if (activeDisplay) {
-                        if (targetModel === "qwen") {
-                            activeDisplay.textContent = "Qwen 2.5 Coder 3B Instruct (Expert Code Specialist Mode)";
-                            if (activeIcon) activeIcon.className = "fa-solid fa-laptop-code";
-                        } else if (targetModel === "granite") {
-                            activeDisplay.textContent = "Granite 3.1 3B A800M Instruct (Tutoring & Guidance Mode)";
-                            if (activeIcon) activeIcon.className = "fa-solid fa-graduation-cap";
-                        } else {
-                            activeDisplay.textContent = "Auto (Smart Intent Routing Mode)";
-                            if (activeIcon) activeIcon.className = "fa-solid fa-bolt";
-                        }
-                    }
-                    updateMetrics();
-                }
-            } catch (err) {
-                console.error("Model switch failed:", err);
-                if (activeDisplay) activeDisplay.textContent = "Model switch failed";
-                if (activeIcon) activeIcon.className = "fa-solid fa-triangle-exclamation";
+        // Sync active tab state in main header
+        const headerBtns = document.querySelectorAll(".header-mode-btn");
+        headerBtns.forEach(btn => {
+            if (btn.dataset.mode === targetModel) {
+                btn.classList.add("active");
+            } else {
+                btn.classList.remove("active");
             }
         });
+
+        if (activeDisplay) activeDisplay.textContent = "Swapping mode...";
+        if (activeIcon) activeIcon.className = "fa-solid fa-arrows-rotate fa-spin";
+
+        try {
+            const res = await fetch("/api/switch-model", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ model: targetModel })
+            });
+            const data = await res.json();
+
+            if (data.status === "ok") {
+                if (activeDisplay) {
+                    if (targetModel === "fast_ship" || targetModel === "qwen") {
+                        activeDisplay.textContent = "Qwen 2.5 Coder 3B (Build & Ship Fast Mode)";
+                        if (activeIcon) activeIcon.className = "fa-solid fa-rocket";
+                    } else if (targetModel === "socratic_study" || targetModel === "granite" || targetModel === "lfm") {
+                        activeDisplay.textContent = "Granite 4.1 3B (Step-by-Step Socratic Study Mode)";
+                        if (activeIcon) activeIcon.className = "fa-solid fa-graduation-cap";
+                    } else {
+                        activeDisplay.textContent = "Auto-Routing Mode (ColBERT Intent Analyzer)";
+                        if (activeIcon) activeIcon.className = "fa-solid fa-bolt";
+                    }
+                }
+                updateMetrics();
+            }
+        } catch (err) {
+            console.error("Failed to switch model mode:", err);
+            if (activeDisplay) activeDisplay.textContent = "Error switching mode";
+            if (activeIcon) activeIcon.className = "fa-solid fa-triangle-exclamation";
+        }
     }
+
+    if (modelSelect) {
+        modelSelect.addEventListener("change", (e) => switchSessionMode(e.target.value));
+    }
+
+    // Main window header mode tab click handlers
+    const headerBtns = document.querySelectorAll(".header-mode-btn");
+    headerBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            const targetMode = btn.dataset.mode;
+            switchSessionMode(targetMode);
+        });
+    });
 
     // Breakdown elements
     const breakdownCard = document.getElementById("metrics-breakdown-card");
@@ -79,7 +96,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const breakdownColbert = document.getElementById("breakdown-colbert");
     const breakdownKokoro = document.getElementById("breakdown-kokoro");
     const breakdownOrchestrator = document.getElementById("breakdown-orchestrator");
-    const breakdownOtherUser = document.getElementById("breakdown-other-user");
     const breakdownTotal = document.getElementById("breakdown-total");
 
     // Toggle breakdown panel visibility on click
@@ -133,16 +149,30 @@ document.addEventListener("DOMContentLoaded", () => {
             if (data.status === "Healthy") {
                 const total = data.total_gb;
                 const used = data.used_gb;
-                const percentage = Math.round((used / total) * 100);
+                const percentage = Math.min(100, Math.round((used / total) * 100));
 
                 if (ramPercentage) ramPercentage.textContent = `${percentage}%`;
-                if (ramFill) ramFill.style.width = `${percentage}%`;
+                if (ramFill) {
+                    ramFill.style.width = `${percentage}%`;
+                    // Turn bar amber when above 85% of cgroup ceiling
+                    ramFill.style.background = percentage >= 90
+                        ? "linear-gradient(90deg, #ef4444, #f97316)"
+                        : percentage >= 75
+                        ? "linear-gradient(90deg, #f59e0b, #fbbf24)"
+                        : "";
+                }
                 if (ramUsed) ramUsed.textContent = `${used.toFixed(1)} GB`;
-                if (ramTotal) ramTotal.textContent = `${total.toFixed(1)} GB`;
+                if (ramTotal) {
+                    ramTotal.textContent = data.cgroup_active
+                        ? `${total.toFixed(1)} GB (cgroup cap)`
+                        : `${total.toFixed(1)} GB`;
+                }
 
                 const summaryHeader = document.getElementById("memory-summary-header");
                 if (summaryHeader) {
-                    summaryHeader.textContent = `${used.toFixed(1)} GB / ${total.toFixed(1)} GB`;
+                    summaryHeader.textContent = data.cgroup_active
+                        ? `${used.toFixed(1)} GB / ${total.toFixed(1)} GB  🛡️ cgroup`
+                        : `${used.toFixed(1)} GB / ${total.toFixed(1)} GB`;
                 }
 
                 // Populate detailed memory breakdown
@@ -153,29 +183,29 @@ document.addEventListener("DOMContentLoaded", () => {
                         const gpuMb = Number(b.granite_gpu_mb || 0);
                         const weightsMb = Number(b.model_weights_mb || 0);
                         const activeMb = gpuMb > 0 ? gpuMb : weightsMb;
-                        const diskGb = Number(b.model_disk_gb || 0).toFixed(1);
+                        const diskGb = Number(b.model_disk_gb || 0).toFixed(2);
                         breakdownGpu.textContent = activeMb >= 1024
-                            ? `${(activeMb / 1024).toFixed(2)} GB (${diskGb} GB file)`
-                            : `${activeMb.toFixed(1)} MB (${diskGb} GB file)`;
+                            ? `${(activeMb / 1024).toFixed(2)} GB (${diskGb} GB on disk)`
+                            : `${activeMb.toFixed(1)} MB (${diskGb} GB on disk)`;
                     }
                     if (breakdownModelName) breakdownModelName.textContent = b.model_name || "Active Model";
                     
                     const activeDisplay = document.getElementById("active-model-name-display");
                     const activeIcon = document.getElementById("active-model-icon");
-                    if (activeDisplay && b.model_name) {
+                    if (activeDisplay && b.model_name && b.model_name !== "None") {
                         const mName = String(b.model_name).toLowerCase();
                         if (mName.includes("qwen")) {
-                            activeDisplay.textContent = `${b.model_name} (Expert Code Specialist Mode)`;
-                            if (activeIcon) activeIcon.className = "fa-solid fa-laptop-code";
-                        } else {
-                            activeDisplay.textContent = `${b.model_name} (Tutoring & Guidance Mode)`;
+                            activeDisplay.textContent = "Qwen 2.5 Coder 3B (Build & Ship Fast Mode)";
+                            if (activeIcon) activeIcon.className = "fa-solid fa-rocket";
+                        } else if (mName.includes("granite")) {
+                            activeDisplay.textContent = "Granite 4.1 3B (Step-by-Step Socratic Study Mode)";
                             if (activeIcon) activeIcon.className = "fa-solid fa-graduation-cap";
                         }
                     }
                     if (breakdownEngine) breakdownEngine.textContent = `${Number(b.llama_cpp_overhead_mb || 0).toFixed(1)} MB`;
                     if (breakdownCache) breakdownCache.textContent = `${Number(b.prompt_cache_mb || 0).toFixed(1)} MB`;
                     if (breakdownVision) {
-                        const vStatus = b.vision_status || "Idle (CPU - 0 VRAM)";
+                        const vStatus = b.vision_status || "0 MB (Idle)";
                         breakdownVision.textContent = vStatus;
                         if (vStatus.includes("Active")) {
                             breakdownVision.style.color = "#f59e0b";
@@ -183,11 +213,11 @@ document.addEventListener("DOMContentLoaded", () => {
                             breakdownVision.style.color = "#38bdf8";
                         }
                     }
+
                     
                     if (breakdownColbert) breakdownColbert.textContent = `${Number(b.colbert_rss_mb || 0).toFixed(1)} MB`;
                     if (breakdownKokoro) breakdownKokoro.textContent = `${Number(b.kokoro_rss_mb || 0).toFixed(1)} MB`;
                     if (breakdownOrchestrator) breakdownOrchestrator.textContent = `${Number(b.orchestrator_rss_mb || 0).toFixed(1)} MB`;
-                    if (breakdownOtherUser) breakdownOtherUser.textContent = `${Number(b.other_user_programs_mb || 0).toFixed(1)} MB`;
                     
                     const totMb = Number(b.total_used_mb || 0);
                     if (breakdownTotal) breakdownTotal.textContent = `${(totMb / 1024).toFixed(2)} GB (${totMb.toFixed(0)} MB)`;
@@ -382,11 +412,19 @@ document.addEventListener("DOMContentLoaded", () => {
         const headerDiv = document.createElement("div");
         headerDiv.className = "message-header";
         if (role === "assistant") {
-            const currentModelName = document.getElementById("active-model-name-display")?.textContent || "Granite 3.1 3B (Tutoring Mode)";
-            const isQwen = currentModelName.toLowerCase().includes("qwen");
-            const modelBadgeLabel = isQwen ? "Qwen 2.5 Coder 3B (Code Specialist)" : "Granite 3.1 3B (Socratic Tutor)";
-            const modelIcon = isQwen ? "fa-laptop-code" : "fa-graduation-cap";
-            headerDiv.innerHTML = `<span class="sender-name">Antigravity AI</span> <span style="margin-left: 8px; font-size: 10px; font-weight: 500; color: #34d399; background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.2); padding: 1px 8px; border-radius: 10px;"><i class="fa-solid ${modelIcon}"></i> ${modelBadgeLabel}</span>`;
+            const currentModelName = document.getElementById("active-model-name-display")?.textContent || "Auto-Routing Mode";
+            const isQwen = currentModelName.toLowerCase().includes("qwen") || currentModelName.toLowerCase().includes("fast");
+            const isGranite = currentModelName.toLowerCase().includes("granite") || currentModelName.toLowerCase().includes("socratic") || currentModelName.toLowerCase().includes("lfm");
+            let modelBadgeLabel = "Auto-Routing (ColBERT)";
+            let modelIcon = "fa-bolt";
+            if (isQwen) {
+                modelBadgeLabel = "Qwen 2.5 Coder 3B (Fast Ship)";
+                modelIcon = "fa-rocket";
+            } else if (isGranite) {
+                modelBadgeLabel = "Granite 4.1 3B (Socratic Tutor)";
+                modelIcon = "fa-graduation-cap";
+            }
+            headerDiv.innerHTML = `<span class="sender-name">Professor LowaCode</span> <span style="margin-left: 8px; font-size: 10px; font-weight: 500; color: #34d399; background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.2); padding: 1px 8px; border-radius: 10px;"><i class="fa-solid ${modelIcon}"></i> ${modelBadgeLabel}</span>`;
         } else {
             headerDiv.innerHTML = `<span class="sender-name">You</span>`;
         }
@@ -396,9 +434,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (role === "user") {
             // Render the user's own text verbatim (escaped) so their symbols aren't mangled.
             contentDiv.innerHTML = escapeHtml(content).replace(/\n/g, "<br>");
+        } else if (content === "..." || content === "thinking") {
+            contentDiv.innerHTML = `<div class="thinking-indicator"><i class="fa-solid fa-pen-nib thinking-writer"></i><span>Professor LowaCode is writing</span><div class="thinking-dots"><span></span><span></span><span></span></div></div>`;
         } else {
             contentDiv.innerHTML = formatMessageText(content);
         }
+
 
         wrapperDiv.appendChild(headerDiv);
         wrapperDiv.appendChild(contentDiv);
@@ -484,23 +525,39 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             // Read exact model used from server response header and update badges immediately
-            const usedModel = response.headers.get("x-model-used") || "granite-3.1-3b-a800m-instruct";
+            const usedModel = response.headers.get("x-model-used") || "granite-4.1-3b";
             const isQwen = usedModel.toLowerCase().includes("qwen");
+            const isGranite = usedModel.toLowerCase().includes("granite") || usedModel.toLowerCase().includes("lfm");
 
             const activeDisplay = document.getElementById("active-model-name-display");
             const activeIcon = document.getElementById("active-model-icon");
             if (activeDisplay) {
-                activeDisplay.textContent = isQwen ? "Qwen 2.5 Coder 3B Instruct (Expert Code Specialist Mode)" : "Granite 3.1 3B A800M Instruct (Tutoring & Guidance Mode)";
-                if (activeIcon) activeIcon.className = isQwen ? "fa-solid fa-laptop-code" : "fa-solid fa-graduation-cap";
+                if (isQwen) {
+                    activeDisplay.textContent = "Qwen 2.5 Coder 3B (Build & Ship Fast Mode)";
+                    if (activeIcon) activeIcon.className = "fa-solid fa-rocket";
+                } else if (isGranite) {
+                    activeDisplay.textContent = "Granite 4.1 3B (Step-by-Step Socratic Study Mode)";
+                    if (activeIcon) activeIcon.className = "fa-solid fa-graduation-cap";
+                } else {
+                    activeDisplay.textContent = "Auto-Routing Mode (ColBERT Intent Analyzer)";
+                    if (activeIcon) activeIcon.className = "fa-solid fa-bolt";
+                }
             }
 
             const msgWrapper = assistantContentDiv.closest(".message-content-wrapper");
             if (msgWrapper) {
                 const msgHeader = msgWrapper.querySelector(".message-header");
                 if (msgHeader) {
-                    const modelBadgeLabel = isQwen ? "Qwen 2.5 Coder 3B (Code Specialist)" : "Granite 3.1 3B (Socratic Tutor)";
-                    const modelIcon = isQwen ? "fa-laptop-code" : "fa-graduation-cap";
-                    msgHeader.innerHTML = `<span class="sender-name">Antigravity AI</span> <span style="margin-left: 8px; font-size: 10px; font-weight: 500; color: #34d399; background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.2); padding: 1px 8px; border-radius: 10px;"><i class="fa-solid ${modelIcon}"></i> ${modelBadgeLabel}</span>`;
+                    let modelBadgeLabel = "Auto-Routing (ColBERT)";
+                    let modelIcon = "fa-bolt";
+                    if (isQwen) {
+                        modelBadgeLabel = "Qwen 2.5 Coder 3B (Fast Ship)";
+                        modelIcon = "fa-rocket";
+                    } else if (isGranite) {
+                        modelBadgeLabel = "Granite 4.1 3B (Socratic Tutor)";
+                        modelIcon = "fa-graduation-cap";
+                    }
+                    msgHeader.innerHTML = `<span class="sender-name">Professor LowaCode</span> <span style="margin-left: 8px; font-size: 10px; font-weight: 500; color: #34d399; background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.2); padding: 1px 8px; border-radius: 10px;"><i class="fa-solid ${modelIcon}"></i> ${modelBadgeLabel}</span>`;
                 }
             }
 
@@ -686,11 +743,10 @@ document.addEventListener("DOMContentLoaded", () => {
         };
 
         recognition.onend = () => {
-            const hadText = chatInput.value.trim().length > 0;
             stopListening();
-            if (hadText) {
-                // Auto-submit the voice prompt
-                chatForm.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+            if (chatInput.value.trim().length > 0) {
+                chatInput.focus();
+                chatInput.placeholder = "Review your transcribed text above, edit if needed, and press Enter or click Send!";
             }
         };
 

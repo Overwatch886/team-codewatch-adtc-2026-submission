@@ -227,6 +227,46 @@ select:focus, input:focus {
     color: var(--text-secondary);
 }
 
+/* Main Window Mode Switcher Tabs */
+.header-mode-switcher {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(18, 22, 33, 0.7);
+    padding: 4px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    backdrop-filter: blur(12px);
+}
+
+.header-mode-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    padding: 6px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: var(--transition);
+}
+
+.header-mode-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.header-mode-btn.active {
+    background: rgba(124, 58, 237, 0.25);
+    color: #a78bfa;
+    border-color: rgba(124, 58, 237, 0.4);
+    box-shadow: 0 0 12px rgba(124, 58, 237, 0.2);
+}
+
 .icon-btn {
     background: transparent;
     border: none;
@@ -286,6 +326,68 @@ select:focus, input:focus {
 .message.assistant {
     align-self: flex-start;
 }
+
+/* Interactive Thinking / Processing Animation: Tutor Writing */
+.thinking-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    background: rgba(124, 58, 237, 0.08);
+    border: 1px solid rgba(124, 58, 237, 0.25);
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #c084fc;
+    box-shadow: 0 0 15px rgba(124, 58, 237, 0.15);
+    animation: thinkingPulse 2s infinite ease-in-out;
+}
+
+.thinking-writer {
+    font-size: 14px;
+    color: #e879f9;
+    transform-origin: bottom left;
+    animation: writingStroke 1.2s infinite ease-in-out;
+}
+
+.thinking-dots {
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.thinking-dots span {
+    width: 5px;
+    height: 5px;
+    background-color: #c084fc;
+    border-radius: 50%;
+    display: inline-block;
+    animation: dotBounce 1.4s infinite ease-in-out both;
+}
+
+.thinking-dots span:nth-child(1) { animation-delay: -0.32s; }
+.thinking-dots span:nth-child(2) { animation-delay: -0.16s; }
+.thinking-dots span:nth-child(3) { animation-delay: 0s; }
+
+@keyframes writingStroke {
+    0% { transform: rotate(0deg) translate(0, 0); }
+    25% { transform: rotate(-15deg) translate(-2px, -2px); }
+    50% { transform: rotate(10deg) translate(2px, 0); }
+    75% { transform: rotate(-10deg) translate(-1px, 1px); }
+    100% { transform: rotate(0deg) translate(0, 0); }
+}
+
+@keyframes dotBounce {
+    0%, 80%, 100% { transform: scale(0.4); opacity: 0.4; }
+    40% { transform: scale(1.1); opacity: 1; filter: drop-shadow(0 0 6px #c084fc); }
+}
+
+@keyframes thinkingPulse {
+    0%, 100% { border-color: rgba(124, 58, 237, 0.25); box-shadow: 0 0 10px rgba(124, 58, 237, 0.1); }
+    50% { border-color: rgba(232, 121, 249, 0.5); box-shadow: 0 0 20px rgba(232, 121, 249, 0.3); }
+}
+
+
 
 .avatar {
     width: 36px;

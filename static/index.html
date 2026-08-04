@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Antigravity Local AI Assistant</title>
+    <title>LowaCode Local AI Assistant</title>
     <link rel="stylesheet" href="/static/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,17 +16,17 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <i class="fa-solid fa-microchip logo-icon"></i>
-                <h2>Antigravity</h2>
+                <h2>LowaCode</h2>
             </div>
             
             <div class="settings-section">
                 <h3>Settings</h3>
                 <div class="form-group">
-                    <label for="model-select"><i class="fa-solid fa-brain"></i> Active Model Mode</label>
+                    <label for="model-select"><i class="fa-solid fa-brain"></i> Session Mode & Model Selector</label>
                     <select id="model-select" style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; outline: none; width: 100%;">
-                        <option value="auto">⚡ Auto (Smart Intent Routing)</option>
-                        <option value="granite">🎓 Granite 3.1 3B (Tutoring & Speed - 30 t/s)</option>
-                        <option value="qwen">💻 Qwen 2.5 Coder 3B (Expert Coding - 11 t/s)</option>
+                        <option value="auto" selected>⚡ Auto-Routing Mode (ColBERT Intent Analyzer)</option>
+                        <option value="socratic_study">🎓 Step-by-Step Socratic Study Mode (Granite 4.1 3B)</option>
+                        <option value="fast_ship">🚀 Build & Ship Fast Mode (Qwen 2.5 Coder 3B)</option>
                     </select>
                 </div>
                 <div class="form-row">
@@ -91,7 +91,8 @@
                         </div>
                         <div class="breakdown-item" style="display: flex; justify-content: space-between; align-items: center;">
                             <span style="color: var(--text-secondary);"><i class="fa-solid fa-eye" style="margin-right: 4px; font-size: 10px; color: #38bdf8;"></i> Vision Engine:</span>
-                            <span id="breakdown-vision" style="font-weight: 600; color: #38bdf8;">Idle (CPU - 0 VRAM)</span>
+                            <span id="breakdown-vision" style="font-weight: 600; color: #38bdf8;">0 MB (Idle)</span>
+
                         </div>
                         <div class="breakdown-item" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.04); padding-top: 4px;">
                             <span style="color: var(--text-secondary);"><i class="fa-solid fa-magnifying-glass" style="margin-right: 4px; font-size: 10px;"></i> ColBERT Search:</span>
@@ -104,10 +105,6 @@
                         <div class="breakdown-item" style="display: flex; justify-content: space-between; align-items: center;">
                             <span style="color: var(--text-secondary);"><i class="fa-solid fa-laptop-code" style="margin-right: 4px; font-size: 10px;"></i> Orchestrator:</span>
                             <span id="breakdown-orchestrator" style="font-weight: 500;">0.0 MB</span>
-                        </div>
-                        <div class="breakdown-item" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.04); padding-top: 4px;">
-                            <span style="color: var(--text-secondary);"><i class="fa-solid fa-window-restore" style="margin-right: 4px; font-size: 10px;"></i> Other User Programs:</span>
-                            <span id="breakdown-other-user" style="font-weight: 500;">0.0 MB</span>
                         </div>
                         <div class="breakdown-item" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--border-color); padding-top: 6px; margin-top: 4px;">
                             <span style="color: var(--text-primary); font-weight: 500;">Total Allocated:</span>
@@ -131,9 +128,23 @@
                     <h1>Local Chat Orchestrator</h1>
                     <div class="active-model-indicator" id="active-model-indicator" style="display: flex; align-items: center; gap: 6px; margin-top: 4px; padding: 3px 10px; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.25); border-radius: 20px; font-size: 11px; color: #34d399; font-weight: 500; width: fit-content;">
                         <i class="fa-solid fa-graduation-cap" id="active-model-icon"></i>
-                        <span id="active-model-name-display">Granite 3.1 3B A800M (Tutoring & Guidance Mode)</span>
+                        <span id="active-model-name-display">Auto-Routing Mode (ColBERT Intent Analyzer)</span>
                     </div>
                 </div>
+
+                <!-- Main Window Mode Switcher Tabs -->
+                <div class="header-mode-switcher" id="header-mode-switcher">
+                    <button type="button" class="header-mode-btn active" data-mode="auto" title="Auto Intent Routing via ColBERT">
+                        <i class="fa-solid fa-bolt"></i> ⚡ Auto Mode
+                    </button>
+                    <button type="button" class="header-mode-btn" data-mode="socratic_study" title="Step-by-Step Socratic Study Mode (Granite 4.1 3B)">
+                        <i class="fa-solid fa-graduation-cap"></i> 🎓 Step-by-Step Socratic
+                    </button>
+                    <button type="button" class="header-mode-btn" data-mode="fast_ship" title="Build & Ship Fast Mode (Qwen 2.5 Coder 3B)">
+                        <i class="fa-solid fa-rocket"></i> 🚀 Fast Ship & Direct Code
+                    </button>
+                </div>
+
                 <div class="header-actions">
                     <button id="clear-chat-btn" class="icon-btn" title="Clear Chat History">
                         <i class="fa-solid fa-trash-can"></i>
@@ -148,11 +159,11 @@
                     <div class="avatar"><i class="fa-solid fa-robot"></i></div>
                     <div class="message-content-wrapper">
                         <div class="message-header">
-                            <span class="sender-name">Antigravity CodeLab</span>
+                            <span class="sender-name">Professor LowaCode</span>
                         </div>
                         <div class="message-content">
-                            <p>Welcome to <strong>Antigravity CodeLab</strong> — your 100% offline AI Pair-Programmer & Socratic Coding Tutor.</p>
-                            <p>Choose an interactive mode or start asking questions:</p>
+                            <p>Welcome! I am <strong>Professor LowaCode</strong> — your 100% offline Socratic Coding Tutor & Pair Programmer.</p>
+                            <p>Select a session mode above or choose a quick action below to begin:</p>
                             <div class="quick-action-chips">
                                 <button type="button" class="action-chip" data-prompt="Help me build a URL shortener script step by step.">
                                     <i class="fa-solid fa-graduation-cap"></i> 🎓 Step-by-Step Socratic Tutor
@@ -195,6 +206,6 @@
     </div>
 
     <!-- Script imports -->
-    <script src="/static/app.js?v=20260725_v16"></script>
+    <script src="/static/app.js?v=20260801_v17"></script>
 </body>
 </html>

@@ -1,19 +1,38 @@
-# Model weights — never commit these to git
+# ── Model weights — never commit (downloaded via download_model.sh / download_models.sh) ──
 *.gguf
 *.bin
 *.safetensors
 model/
+answerai-colbert-small-v1/
 
-# macOS
-.DS_Store
-
-# Python
+# ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
+*.pyo
 .venv/
 venv/
 
-# Local profiler output
+# ── Runtime / generated ───────────────────────────────────────────────────────
+*.log
+logs/
+colbert_index/
+scripts/colbert_index/
+outputs/
+
+# ── Competition evaluation outputs ────────────────────────────────────────────
 submission.json
 audit.json
-*.log
+verdict.json
+scratch_eval_results.json
+qwen_eval_results.json
+
+# ── OS / IDE ──────────────────────────────────────────────────────────────────
+.DS_Store
+.cursor/
+.agyrules
+
+# ── Keys / secrets ────────────────────────────────────────────────────────────
+key
+key.pub
+*.pem
+*.key

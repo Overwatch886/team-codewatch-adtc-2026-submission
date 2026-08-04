@@ -11,21 +11,27 @@ from pydantic import BaseModel
 from transformers import AutoTokenizer
 
 
+import pathlib
+
 # =====================================================
 # CONFIG
 # =====================================================
 
-MODEL_DIR = "/home/overwatch886/local_ai_workspace/answerai-colbert-small-v1"
+# All paths are relative to this file's location (repo root)
+_HERE = pathlib.Path(__file__).resolve().parent
+
+MODEL_DIR = str(os.getenv("COLBERT_MODEL_DIR") or _HERE / "answerai-colbert-small-v1")
 MODEL_FILE = "model_int8.onnx"
 
-RETRIEVAL_DIR = "/home/overwatch886/local_ai_workspace/scripts"
+RETRIEVAL_DIR = str(os.getenv("COLBERT_RETRIEVAL_DIR") or _HERE / "scripts")
 
-INDEX_DIR = "/home/overwatch886/local_ai_workspace/colbert_index"
+INDEX_DIR = str(os.getenv("COLBERT_INDEX_DIR") or _HERE / "colbert_index")
 
-MAX_LENGTH = 256
-CHUNK_SIZE = 1500
-CHUNK_OVERLAP = 200
-
+MAX_LENGTH = int(os.getenv("COLBERT_MAX_LENGTH", "256"))
+CHUNK_SIZE = int(os.getenv("COLBERT_CHUNK_SIZE", "1500"))
+CHUNK_OVERLAP = int(os.getenv("COLBERT_CHUNK_OVERLAP", "200"))
+COLBERT_THREADS = int(os.getenv("COLBERT_THREADS", "4"))
+COLBERT_BATCH_SIZE = int(os.getenv("COLBERT_BATCH_SIZE", "2000"))
 
 os.makedirs(INDEX_DIR, exist_ok=True)
 
@@ -49,7 +55,7 @@ def load_model():
 
     print("Loading ONNX model...")
     options = ort.SessionOptions()
-    options.intra_op_num_threads = 6
+    options.intra_op_num_threads = COLBERT_THREADS
     options.inter_op_num_threads = 1
 
     session = ort.InferenceSession(
@@ -73,6 +79,18 @@ def load_model():
     for item in session.get_outputs():
         print(item.name, item.shape)
 
+
+def unload_model():
+    """Release the ColBERT ONNX session and tokenizer from RAM.
+    Frees ~200 MB. Call before running the vision subprocess, reload after."""
+    global tokenizer, session
+    if session is None and tokenizer is None:
+        return
+    print("[ColBERT] Unloading ONNX session to free RAM for vision model...")
+    session = None
+    tokenizer = None
+    gc.collect()
+    print("[ColBERT] ONNX session unloaded.")
 
 
 
@@ -103,6 +121,23 @@ def extract_text_from_pdf(filepath):
         print(f"Error reading PDF {filepath}: {e}")
         return ""
 
+def extract_text_from_docx(filepath):
+    try:
+        import zipfile
+        import xml.etree.ElementTree as ET
+        with zipfile.ZipFile(filepath) as z:
+            xml_content = z.read('word/document.xml')
+        tree = ET.fromstring(xml_content)
+        paragraphs = []
+        for p in tree.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p'):
+            texts = [node.text for node in p.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t') if node.text]
+            if texts:
+                paragraphs.append("".join(texts))
+        return "\n".join(paragraphs)
+    except Exception as e:
+        print(f"Error reading DOCX {filepath}: {e}")
+        return ""
+
 def load_directory(path):
     skip_extensions = {
         '.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tiff', '.ico',
@@ -127,6 +162,8 @@ def load_directory(path):
                 text = ""
                 if ext == ".pdf":
                     text = extract_text_from_pdf(filepath)
+                elif ext == ".docx":
+                    text = extract_text_from_docx(filepath)
                 else:
                     with open(
                         filepath,
@@ -612,7 +649,7 @@ def build_index():
 
     batch_docs = []
     batch_embs = []
-    BATCH_SIZE = 2000  # Stream to disk every 2000 chunks to protect memory bounds
+    BATCH_SIZE = COLBERT_BATCH_SIZE  # Stream to disk based on configured memory bounds
 
     for idx, item in enumerate(files):
         if (idx + 1) % 100 == 0 or idx < 10:
@@ -763,6 +800,8 @@ def search(
     }
 
 
+import gc
+
 def load_index():
     global documents, embeddings
     if documents and len(embeddings) > 0:
@@ -772,17 +811,18 @@ def load_index():
     bin_embs_path = os.path.join(INDEX_DIR, "embeddings.bin")
     
     if os.path.exists(docs_path):
-        print("Loading ColBERT index from disk...")
+        print("Loading ColBERT index from disk (mmap mode enabled)...")
         try:
             with open(docs_path, "r", encoding="utf-8") as f:
                 documents = json.load(f)
             
-            if os.path.exists(bin_embs_path):
+            if os.path.exists(embs_path):
+                embeddings = list(np.load(embs_path, mmap_mode='r', allow_pickle=True))
+            elif os.path.exists(bin_embs_path):
                 embeddings = load_embeddings_bin(bin_embs_path)
-            elif os.path.exists(embs_path):
-                embeddings = list(np.load(embs_path, allow_pickle=True))
             
-            print(f"Loaded {len(documents)} chunks from index.")
+            gc.collect()
+            print(f"Loaded {len(documents)} chunks from index with mmap memory protection.")
             return True
         except Exception as e:
             print(f"Failed to load index from disk: {e}")
@@ -819,16 +859,27 @@ def local_search(query: str, top_k: int = 5, file_hints: List[str] = []):
         }
 
     results = []
+
     for idx in candidate_indices:
         doc_vector = embeddings[idx]
-        score = maxsim(query_vector, doc_vector)
-        results.append({
-            "score": score,
-            "file": documents[idx]["file"],
-            "text": documents[idx]["text"]
-        })
+        score = maxsim(
+            query_vector,
+            doc_vector
+        )
+        results.append(
+            {
+                "score": score,
+                "file": documents[idx]["file"],
+                "text": documents[idx]["text"]
+            }
+        )
 
-    results.sort(key=lambda x: x["score"], reverse=True)
+    results.sort(
+        key=lambda x: x["score"],
+        reverse=True
+    )
+
+    gc.collect()
 
     return {
         "query": query,
@@ -837,7 +888,7 @@ def local_search(query: str, top_k: int = 5, file_hints: List[str] = []):
                 "rank": i + 1,
                 "score": round(item["score"], 4),
                 "file": item["file"],
-                "text": item["text"]
+                "text": item["text"][:500]
             }
             for i, item in enumerate(results[:top_k])
         ]
@@ -865,7 +916,7 @@ def index_file_on_the_fly(path: str, content: str):
         
     new_embeddings = []
     for chunk in chunks:
-        emb = encode_document(chunk)
+        emb = encode(chunk)
         documents.append({"file": filename, "text": chunk})
         new_embeddings.append(emb)
         
