@@ -1,6 +1,6 @@
 # 🚀 Antigravity CodeLab Architecture & Product Guide
 
-**Antigravity CodeLab** (Code Persona) is a 100% offline, privacy-first AI Pair-Programmer & Socratic Coding Tutor engineered specifically for 8GB system constraints.
+**Antigravity CodeLab** (Code Persona) is a 100% offline, privacy-first AI Pair-Programmer & Socratic Coding Tutor engineered under a **hard 4 GB RAM system ceiling**.
 
 ---
 
@@ -23,12 +23,11 @@ Antigravity CodeLab provides three specialized, interactive pair-programming wor
 
 ---
 
-## 🔒 Focus Workstation & Distraction-Free Kiosk Mode
+## 🔒 Memory Ceiling & Workstation Tuning
 
-- **Educational Impact**: Designed for real-world African technical schools and budget hardware where background desktop bloat and browser tabs consume critical RAM.
-- **RAM Optimization**: Suspends background Linux daemons (`tracker-miner`, `snapd`, `packagekit`), freeing 600 MB - 1.2 GB of physical RAM.
-- **Memory Guard**: Enforces systemd cgroup bounds (`MemoryMax=7.5G`), keeping total system memory usage strictly safe inside the 8 GB ceiling.
-- **Student Focus**: Launches Code Persona in a clean, distraction-free kiosk window, helping technical students focus on learning without social media distractions.
+- **Educational Impact**: Designed for real-world technical education and budget hardware where RAM is strictly constrained.
+- **Memory Ceiling Guard**: Enforces systemd cgroup bounds (`MemoryMax=4G`, `MemoryHigh=3.7G`), keeping total system memory usage strictly bounded.
+- **System Tuning**: `setup_system_permanently.sh` configures 4 GB `/dev/shm`, 12 GB persistent swap, `vm.swappiness=5`, `vm.dirty_ratio=20`, `vm.dirty_background_ratio=5`, and unlimited memlock.
 
 ---
 
@@ -40,43 +39,42 @@ Antigravity CodeLab provides three specialized, interactive pair-programming wor
 - **Automatic Unloader**: Disabling TTS on the sidebar instantly purges the model from RAM via `gc.collect()`, freeing 340 MB back to the OS.
 
 ### 🎙️ Parakeet TDT Push-to-Talk STT & Manual User Review
-- **Engine**: Parakeet TDT Multilingual (`SBPN_multilingual_large_q8_0.gguf`).
+- **Engine**: Parakeet TDT Multilingual (`tdt-0.6b-v2-q5_k.gguf`).
 - **User Review & Edit**: Speech is transcribed directly into the text input box, allowing the user to inspect, edit, or add code before manually sending to the model.
 
-### 📄 Adaptive Document & Image Ingestion
-- **Formats Supported**: `.py`, `.js`, `.ts`, `.json`, `.md`, `.txt`, `.docx` (Microsoft Word), `.pdf`, `.png`, `.jpg` (Vision).
+### 📄 Adaptive Document Ingestion
+- **Formats Supported**: `.py`, `.js`, `.ts`, `.json`, `.md`, `.txt`, `.docx` (Microsoft Word), `.pdf`.
 - **Small Documents (≤ 1,500 words)**: Direct context dumping into the prompt for 100% full-text accuracy.
 - **Large Documents (> 1,500 words)**: Auto-indexed on-the-fly with AnswerAI ColBERT in ~0.25 seconds.
 
 ---
 
-## 🧠 Reasoning Engine & Quantization Selection
+## 🧠 Reasoning Engine & Model Selection
 
-| Component | Choice | Specs & Performance |
+| Component | Model / Spec | Config & Details |
 | :--- | :--- | :--- |
-| **Primary Model** | **Granite 4.0 H-Tiny** | Hybrid Mamba/MoE (3.3B total / 800M active), linear context scaling. |
-| **Quantization** | **`IQ4_XS` (imatrix)** | 4-bit importance matrix calibration (~2.45 GB - 3.5 GB RAM footprint, ~28.6 t/s speed). |
-| **Memory Locking** | `--mlock` | Locks model weights into physical RAM, preventing Linux kernel swap stutters. |
-| **CPU Execution** | `-ngl 0` / Vulkan iGPU | 100% pure CPU execution, or Vulkan/GTT layer offloading (`-ngl 14`) when iGPU is available. |
+| **Socratic Tutor LLM** | **Granite 4.1 3B** (`Q4_K_M`) | Primary Socratic Tutor model (4,096 context window). |
+| **Fast Ship LLM** | **Qwen 2.5 Coder 3B** (`Q4_K_M`) | Fast Ship coding model (10,240 / 10k context window). |
+| **Memory Locking** | `--mlock` + `--mmap` | Locks model weights into physical RAM, preventing swap stutters. |
 | **KV Cache** | `-ctk q8_0 -ctv q8_0` | 8-bit quantized context cache to minimize memory overhead under long contexts. |
+| **RAG Engine** | **AnswerAI ColBERT** (ONNX) | Late-interaction semantic search (~200 MB resident memory). |
 
 ---
 
-## ⚙️ Hardware & VRAM Telemetry (8GB System Budget)
+## ⚙️ Memory & Process Telemetry
 
-- **Physical System RAM**: 6.35 GiB usable physical RAM on budget 8 GB laptops.
-- **ZRAM State**: Permanently masked (`/dev/null`) to eliminate memory compression CPU overhead.
-- **Real-Time Memory Breakdown**: Tracks OS Baseline, Active LLM RAM (`granite_rss_mb`), llama.cpp overhead, Kokoro TTS, and Orchestrator RSS in real time via `/api/metrics`.
+- **Real-Time Memory Breakdown**: Tracks OS Baseline, Active Model RAM (`RssAnon`), llama.cpp engine, Kokoro TTS, and Orchestrator RSS in real time via `/api/metrics`.
+- **RssAnon Accounting**: Reads anonymous heap memory to exclude mmap'd GGUF file pages, giving an accurate physical RAM usage readout alongside actual disk size.
 
 ---
 
 ## 🚀 Service Architecture & Endpoints
 
-- **Model Server**: `http://localhost:8081` (llama-server)
+- **Backend Model Server**: `http://localhost:8081` (`llama-server`)
 - **Orchestrator & Web UI**: `http://localhost:8085` (FastAPI orchestrator)
 
 ### Key Endpoints:
-- `POST /v1/chat/completions`: Standard OpenAI-compatible completion endpoint with dynamic GBNF grammar constraints.
-- `POST /api/switch-model`: Swaps active model between Granite 4.0 H-Tiny and Qwen 2.5 Coder 3B dynamically.
-- `GET /api/metrics`: Returns detailed system VRAM, RAM, and breakdown metrics.
+- `POST /v1/chat/completions`: Standard OpenAI-compatible completion endpoint with dynamic GBNF grammar constraints and auto-recovery retry logic.
+- `POST /api/switch-model`: Swaps active model between Granite 4.1 3B and Qwen 2.5 Coder 3B dynamically.
+- `GET /api/metrics`: Returns detailed system memory breakdown and dynamic GGUF disk sizes.
 - `POST /api/settings`: Toggles Kokoro TTS and triggers immediate memory unloader when disabled.

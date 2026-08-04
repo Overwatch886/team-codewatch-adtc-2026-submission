@@ -2,23 +2,25 @@
 
 > **Africa Deep Tech Challenge 2026 Submission** | **Track:** `coding_assistants` | **Team:** `code-persona`
 
-Code Persona (Antigravity CodeLab) is a 100% offline, privacy-first AI Pair Programmer and Socratic Coding Tutor designed to run on budget 8 GB RAM laptops with integrated graphics.
+Code Persona (Antigravity CodeLab) is a 100% offline, privacy-first AI Pair Programmer and Socratic Coding Tutor engineered to run under a **hard 4 GB RAM ceiling** on budget laptops with integrated graphics.
 
 ---
 
 ## 🌟 Key Features & Capabilities
 
-- **🧠 Granite 4.0 H-Tiny Engine (`IQ4_XS` imatrix)**: Powered by IBM's hybrid Mamba/MoE architecture (3.3B parameters, 800M active), offering top-tier instruction following and linear context scaling under 8 GB RAM constraints.
-- **🔒 Focus Workstation & Distraction-Free Kiosk Mode**: Tailored for technical education environments; suspends desktop background bloat (`tracker-miner`, `snapd`), freeing 600MB - 1.2GB of RAM while helping students maintain 100% focus.
-- **🎙️ Parakeet TDT Push-to-Talk STT & User Review**: Speech is transcribed directly into the chat input box using Parakeet TDT, allowing users to review and edit their prompt before sending.
+- **🧠 Dual Reasoning Engine**:
+  - **Granite 4.1 3B (`Q4_K_M`)**: Primary Socratic Tutor model for step-by-step guidance and debugging without full-code spoilers (4,096 context window).
+  - **Qwen 2.5 Coder 3B (`Q4_K_M`)**: Fast Ship coding model for direct generation with an expanded **10,240 (10k) token context window**.
+- **🛡️ Hard 4 GB RAM Ceiling Guard**: Enforces systemd cgroup bounds (`MemoryMax=4G`, `MemoryHigh=3.7G`) to keep the orchestrator, model server, and RAG search strictly bounded.
+- **🎙️ Parakeet TDT Push-to-Talk STT & User Review**: Speech is transcribed directly into the input box using Parakeet TDT, allowing users to review and edit prompts before sending.
 - **🎓 3-Mode Socratic Mentorship (GBNF Grammar Constrained)**:
   1. *Step-by-Step Tutor*: Outputs Step 1 + actionable task without full-code spoilers, constrained via GBNF grammar.
-  2. *Traceback Diagnostic*: Explains Python/C/JS errors in plain English and gives hints.
+  2. *Traceback Diagnostic*: Explains Python/C/JS errors in plain English and gives actionable hints.
   3. *Code Review & Refactoring*: Evaluates code readability, edge cases, and performance.
 - **📄 Adaptive Multi-Format Document Ingestion**: Attach `.py`, `.js`, `.json`, `.md`, `.txt`, `.docx` (Microsoft Word), or `.pdf` files.
-  - Small files (≤ 1,500 words) dump directly into the context window.
+  - Small files (≤ 1,500 words) load directly into the context window.
   - Large files (> 1,500 words) are automatically indexed on-the-fly via ColBERT in ~0.25s.
-- **⚙️ Real-Time 8GB Telemetry & Memory Guard**: Tracks OS Baseline, Model RAM (`--mlock`), Kokoro TTS, and system memory in real time via `/api/metrics`.
+- **⚙️ Real-Time Telemetry & Precise Memory Accounting**: Tracks OS Baseline, Active Model RAM (`RssAnon`), llama.cpp engine, and dynamic GGUF disk sizes in real time via `/api/metrics`.
 
 ---
 
@@ -27,22 +29,25 @@ Code Persona (Antigravity CodeLab) is a 100% offline, privacy-first AI Pair Prog
 ```
 code-persona-adtc-2026-submission/
 ├── docs/
-│   └── CODELAB_ARCHITECTURE.md ← Complete system architecture, GBNF rules & API guide
-├── REPORT.md                  ← Detailed technical competition report & benchmarks
-├── README.md                  ← Public repository documentation & usage guide
-├── metadata.json              ← Required competition metadata & test prompts
-├── download_model.sh          ← Model download script for llama.cpp runtime
-├── acolbert.py                ← Local ColBERT Late-Interaction RAG & On-The-Fly Indexer
+│   └── CODELAB_ARCHITECTURE.md   ← Complete system architecture & API guide
+├── REPORT.md                    ← Detailed technical competition report & benchmarks
+├── README.md                    ← Public repository documentation & usage guide
+├── metadata.json                ← Required competition metadata & test prompts
+├── download_model.sh            ← Benchmark model downloader script
+├── download_models.sh           ← Supporting models downloader (Granite, Qwen, ColBERT, Audio)
+├── install_linux.sh             ← Automated installer script for native Linux
+├── install_wsl.sh               ← Automated installer script for Windows WSL2
+├── run_4gb_bounded_server.sh    ← Main memory-bounded server launcher script
+├── requirements.txt             ← Python dependencies
+├── acolbert.py                  ← Local ColBERT Late-Interaction RAG & On-The-Fly Indexer
+├── build_colbert_index.py       ← Local document indexing script
 ├── scripts/
-│   ├── orchestrator_server.py ← Local FastAPI Orchestrator, TTS & Teacher Prompt Manager
-│   ├── orchestrator.py        ← Query intent router & file context builder
-│   ├── start-all-services-no-sudo.sh ← Single launcher script
-│   ├── voice_type_parakeet.sh ← Push-to-talk STT transcription helper
-│   └── speak.py               ← Kokoro TTS helper script
-├── static/
-│   ├── index.html             ← Modern Glassmorphism Web Dashboard & Voice Controls
-│   ├── app.js                 ← Web Speech API, Model Swapper & Telemetry JS engine
-│   └── style.css              ← Sleek Dark Mode UI Tokens & Micro-Animations
+│   ├── orchestrator_server.py   ← Local FastAPI Orchestrator, TTS & Teacher Prompt Manager
+│   └── setup_system_permanently.sh ← System performance & memory tuning script
+└── static/
+    ├── index.html               ← Modern Glassmorphism Web Dashboard & Voice Controls
+    ├── app.js                   ← Web Speech API, Model Swapper & Telemetry JS engine
+    └── style.css                ← Sleek Dark Mode UI Tokens & Micro-Animations
 ```
 
 ---
@@ -50,36 +55,51 @@ code-persona-adtc-2026-submission/
 ## 🚀 Quick Start Guide
 
 ### 1. Download Model Weights
-Run the automated downloader script to fetch the quantized model weights:
+Run the supporting model downloader to fetch Granite 4.1 3B, Qwen 2.5 Coder 3B, and ColBERT weights:
 ```bash
-bash download_model.sh
+./download_models.sh
+./download_model.sh
 ```
 
-### 2. Launch All Local Services
-Start the local model server, ColBERT vector indexer, and web orchestrator:
+### 2. Run System Optimizations (Optional, recommended)
+Configure system memory settings (4 GB `/dev/shm`, 12 GB swap, `swappiness=5`, unlimited memlock):
 ```bash
-bash scripts/start-all-services-no-sudo.sh
+sudo ./scripts/setup_system_permanently.sh
 ```
 
-### 3. Open Web Dashboard
-Navigate to `http://localhost:8085` in your browser.
+### 3. Automated Installation
+For native Linux (Ubuntu, Debian, Fedora, Arch):
+```bash
+./install_linux.sh
+```
 
-- Click 🎙️ for **Push-to-Talk Voice Dictation** (transcribes into input box for manual review).
-- Click **🎓 Step-by-Step Socratic Tutor** to start an interactive lesson.
-- Attach any `.pdf`, `.docx`, or `.py` file to ask questions about your documents offline.
+For Windows users running WSL2:
+```bash
+./install_wsl.sh
+```
+
+### 4. Launch Service Under 4 GB RAM Cap
+Start the orchestrator server:
+```bash
+./run_4gb_bounded_server.sh
+```
+
+### 5. Open Web Dashboard
+Navigate to `http://localhost:8085` in your browser. (If using WSL2, open `http://localhost:8085` directly in Windows browser).
 
 ---
 
-## 📊 Benchmarks & Memory Optimization
+## 📊 Benchmarks & Memory Breakdown
 
-Tested on **HP EliteBook 845 G7 (AMD Ryzen 5 PRO 4650U, 6.35 GiB usable RAM)**:
+Tested under **Hard 4 GB RAM Ceiling** (`MemoryMax=4G`):
 
-| Engine | Quantization | Resident RAM | Generation Speed |
-| :--- | :--- | :--- | :--- |
-| **Granite 4.0 H-Tiny** | `IQ4_XS` (imatrix) | **~2.5 GB - 3.5 GB** | **~28.6 t/s** (CPU Only, `--mlock`) |
-| **Qwen 2.5 Coder 3B** | `Q4_K_M` | **~2.1 GB** | **9.1 t/s** (Dense Code Specialist) |
-| **Kokoro TTS ONNX** | ONNX v1.0 | **340 MB** (Auto-purged) | Instant (0.3s audio latency) |
-| **ColBERT RAG** | ONNX Late-Interaction | **~50 MB** | **0.02s** Search latency |
+| Component | Target / Config | Resident Memory / Details |
+| :--- | :--- | :--- |
+| **Granite 4.1 3B** | `Q4_K_M` (Socratic Mode) | **~1.96 GB** on disk (mmap + `--mlock`), 4,096 ctx |
+| **Qwen 2.5 Coder 3B** | `Q4_K_M` (Fast Ship Mode) | **~1.96 GB** on disk (mmap + `--mlock`), 10,240 (10k) ctx |
+| **ColBERT RAG** | ONNX Late-Interaction | **~200 MB** resident |
+| **Orchestrator FastAPI** | Uvicorn | **~40 MB** resident |
+| **KV Cache** | `q8_0` Quantized | **~160 MB - 280 MB** |
 
 ---
 
