@@ -36,3 +36,6 @@ key
 key.pub
 *.pem
 *.key
+
+# llama.cpp
+software/llama.cpp

@@ -12,7 +12,7 @@ import onnxruntime as rt
 from kokoro_onnx import Kokoro
 
 # Configuration Paths
-WORKSPACE_DIR = "/home/overwatch886/local_ai_workspace"
+WORKSPACE_DIR = "/home/overwatch886/team-codewatch-adtc-2026-submission"
 PARAKEET_BIN = f"{WORKSPACE_DIR}/software/parakeet.cpp/build/examples/cli/parakeet-cli"
 ASR_MODEL = f"{WORKSPACE_DIR}/models/audio/SBPN_multilingual_large_q8_0.gguf"
 KOKORO_MODEL = f"{WORKSPACE_DIR}/models/audio/kokoro/kokoro-v1.0.onnx"

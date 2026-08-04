@@ -35,7 +35,6 @@ if _SCRIPTS_DIR not in sys.path:
 import base64
 import tempfile
 import orchestrator
-import llama_cli_runner
 
 # Global TTS Settings & Lock
 TTS_SETTINGS_FILE = os.path.join(WORKSPACE_DIR, "scratch", "tts_settings.json")
