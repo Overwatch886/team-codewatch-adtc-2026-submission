@@ -8,9 +8,9 @@ Professor Lowacode is a 100% offline AI Pair Programmer and Socratic Coding Tuto
 
 ## Key Features
 
-- **Dual Study Mode**:
-  - **Granite 4.1 3B (`Q4_K_M`)**: Primary Socratic Tutor model for step-by-step guidance and debugging without full-code spoilers (4,096 context window).
-  - **Qwen 2.5 Coder 3B (`Q4_K_M`)**: Fast Ship coding model for direct generation with an expanded **10,240 (10k) token context window**.
+- **Bi-Modal Architecture**:
+  - **Granite 4.1 3B (`Q4_K_M`)**: Primary Socratic Tutor model for step-by-step guidance and debugging without giving full-code answers to helps students learn by asking them probing questions and guiding them to the final answer rather thna just dumping it to them.
+  - **Qwen 2.5 Coder 3B (`Q4_K_M`)**: Fast Ship coding model for direct code generation and full one time answers to help student sbuild fast when necessary.
 - **Hard 4 GB RAM Ceiling Guard**: Enforces systemd cgroup bounds (`MemoryMax=4G`, `MemoryHigh=3.7G`) to keep the orchestrator, model server, and RAG search strictly bounded.
 - **Parakeet TDT Push-to-Talk STT & User Review**: Speech is transcribed directly into the input box using Parakeet TDT, allowing users to review and edit prompts before sending.
 - **3-Mode Socratic Mentorship (GBNF Grammar Constrained)**:
