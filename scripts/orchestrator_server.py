@@ -807,15 +807,36 @@ def ensure_model_loaded(target_key: str, force_restart: bool = False):
     llama_ctk = os.getenv("LLAMA_CTK", "q8_0")
     llama_ctv = os.getenv("LLAMA_CTV", "q8_0")
 
+    # Auto-detect container vs bare-metal capabilities
+    import resource
+    can_mlock = False
+    try:
+        soft_mem, hard_mem = resource.getrlimit(resource.RLIMIT_MEMLOCK)
+        can_mlock = (hard_mem == resource.RLIM_INFINITY or hard_mem > 1024 * 1024 * 1024)
+    except Exception:
+        can_mlock = False
+
+    has_gpu = False
+    try:
+        res = subprocess.run(["nvidia-smi"], capture_output=True)
+        has_gpu = (res.returncode == 0)
+    except Exception:
+        has_gpu = False
+
+    ngl_flag = "99" if has_gpu else "0"
+
     cmd = [
         LLAMA_SERVER_BIN,
         "-m", model_path,
         "-c", llama_ctx, "-b", llama_batch, "-ub", llama_ubatch, "-t", llama_threads,
         "--port", "8081", "--threads-http", llama_http_threads, "--parallel", "1", "--cache-ram", llama_cache_ram,
         "-ctk", llama_ctk, "-ctv", llama_ctv,
-        "--mmap", "--mlock", "-ngl", ngl_flag, "--flash-attn", "on", "--jinja",
+        "--mmap", "-ngl", ngl_flag, "--jinja",
         "--alias", alias_name,
     ]
+
+    if can_mlock:
+        cmd.append("--mlock")
 
     env = dict(os.environ)
     env["RADV_PERFTEST"] = "nosam"
