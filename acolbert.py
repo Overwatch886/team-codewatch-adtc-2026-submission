@@ -888,7 +888,7 @@ def local_search(query: str, top_k: int = 5, file_hints: List[str] = []):
                 "rank": i + 1,
                 "score": round(item["score"], 4),
                 "file": item["file"],
-                "text": item["text"][:500]
+                "text": item["text"].strip()
             }
             for i, item in enumerate(results[:top_k])
         ]
