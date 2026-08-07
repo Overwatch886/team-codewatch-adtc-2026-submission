@@ -6,7 +6,7 @@ import sys
 from typing import Dict, List, Tuple
 
 # Ensure workspace is in python path to import acolbert
-WORKSPACE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+WORKSPACE_DIR = "/home/overwatch886/local_ai_workspace"
 if WORKSPACE_DIR not in sys.path:
     sys.path.append(WORKSPACE_DIR)
 
@@ -17,7 +17,7 @@ from openai import OpenAI
 ROUTER_URL = "http://127.0.0.1:5000/analyze"
 RAG_URL = "http://127.0.0.1:8000/search"
 RAG_TOP_K = 4
-DEFAULT_MENTOR_MODEL = "granite-3.1-3b-a800m-instruct"
+DEFAULT_MENTOR_MODEL = "granite-4.1-3b"
 EXPERT_CODE_MODEL = "qwen2.5-coder-3b-instruct"
 CHAT_MODEL = os.getenv("LITELLM_CHAT_MODEL", DEFAULT_MENTOR_MODEL)
 IMAGE_EXTENSION_PATTERN = re.compile(r"\.(png|jpe?g|webp|bmp|gif|tiff?)\b", re.IGNORECASE)
@@ -25,15 +25,15 @@ IMAGE_WORD_PATTERN = re.compile(r"\b(image|photo|picture|screenshot|diagram)\b",
 
 LLAMA_CLI_BIN = os.getenv(
     "LLAMA_CLI_BIN",
-    "/home/overwatch886/team-codewatch-adtc-2026-submission/software/llama.cpp/build/bin/llama-cli"
+    "/home/overwatch886/local_ai_workspace/software/llama.cpp/build/bin/llama-cli"
 )
 VISION_MODEL_PATH = os.getenv(
     "VISION_MODEL_PATH",
-    "/home/overwatch886/team-codewatch-adtc-2026-submission/models/lnn/vision/LFM2.5-VL-1.6B-Q4_0.gguf"
+    "/home/overwatch886/local_ai_workspace/models/lnn/vision/LFM2.5-VL-1.6B-Q4_0.gguf"
 )
 VISION_MMPROJ_PATH = os.getenv(
     "VISION_MMPROJ_PATH",
-    "/home/overwatch886/team-codewatch-adtc-2026-submission/models/lnn/vision/mmproj-LFM2.5-VL-1.6b-Q8_0.gguf"
+    "/home/overwatch886/local_ai_workspace/models/lnn/vision/mmproj-LFM2.5-VL-1.6b-Q8_0.gguf"
 )
 VISION_CTX = int(os.getenv("VISION_CTX", "2048"))
 VISION_THREADS = int(os.getenv("VISION_THREADS", "4"))
@@ -63,7 +63,7 @@ def init_intent_embeddings():
         return
     print("[Orchestrator] Pre-encoding ColBERT intent descriptions...")
     # Override MODEL_DIR to absolute path so it runs correctly regardless of cwd
-    acolbert.MODEL_DIR = os.path.join(WORKSPACE_DIR, "model", "answerai-colbert-small-v1")
+    acolbert.MODEL_DIR = "/home/overwatch886/local_ai_workspace/answerai-colbert-small-v1"
     for intent, desc in INTENT_DESCRIPTIONS.items():
         encoded_intents[intent] = acolbert.encode(desc)
     print("[Orchestrator] Intent descriptions encoded successfully.")
@@ -229,7 +229,25 @@ def analyze_query(query: str) -> Tuple[str, List[Dict[str, str]], Dict[str, floa
 
 def read_file_content(path: str) -> str:
     path_lower = path.lower()
-    if path_lower.endswith(".docx"):
+    if path_lower.endswith(".pdf"):
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(path)
+            text_parts = []
+            for page in reader.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    # Clean control characters and PDF artifacts
+                    cleaned = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', page_text)
+                    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+                    text_parts.append(cleaned.strip())
+            parsed_text = "\n\n".join(text_parts)
+            print(f"[Orchestrator] 📄 Parsed .pdf file ({len(parsed_text)} chars): {os.path.basename(path)}")
+            return parsed_text
+        except Exception as e:
+            print(f"⚠️ Error parsing PDF file {path}: {e}")
+            return ""
+    elif path_lower.endswith(".docx"):
         import zipfile
         import xml.etree.ElementTree as ET
         try:
@@ -255,26 +273,33 @@ def build_file_context(entities: List[Dict[str, str]], query_text: str = "") -> 
     prompt_context = ""
     MAX_DIRECT_CONTEXT_CHARS = 6000  # ~1500 tokens threshold
 
+    def get_clean_doc_label(p: str) -> str:
+        bname = os.path.basename(p)
+        if bname.startswith("tmp") or "__" in bname:
+            ext = os.path.splitext(bname)[1].lower().replace(".", "")
+            ext_label = ext.upper() if ext else "FILE"
+            return f"Uploaded Document ({ext_label})"
+        return bname
+
     for entity in entities:
         raw_path = entity.get("text", "")
         path = os.path.expanduser(raw_path)
         if not path or not os.path.exists(path):
             continue
 
+        doc_label = get_clean_doc_label(path)
         try:
             content = read_file_content(path)
             if not content:
                 continue
 
             if len(content) <= MAX_DIRECT_CONTEXT_CHARS:
-                # Small Document: Dump directly into context window
-                print(f"[Orchestrator] 📄 Small file ({len(content)} chars): Direct context dumping for {os.path.basename(path)}")
-                prompt_context += f"\n--- Context from {path} ---\n{content}\n"
+                print(f"[Orchestrator] 📄 Small file ({len(content)} chars): Direct context for {doc_label}")
+                prompt_context += f"\n\n```document: {doc_label}\n{content.strip()}\n```\n"
             else:
-                # Large Document: Index on-the-fly with ColBERT in ~0.3s and retrieve top-k chunks
-                print(f"[Orchestrator] 📚 Large file ({len(content)} chars): Auto ColBERT indexing for {os.path.basename(path)}")
+                print(f"[Orchestrator] 📚 Large file ({len(content)} chars): ColBERT retrieval for {doc_label}")
                 try:
-                    workspace_dir = "/home/overwatch886/team-codewatch-adtc-2026-submission"
+                    workspace_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
                     if workspace_dir not in sys.path:
                         sys.path.append(workspace_dir)
                     import acolbert
@@ -282,14 +307,16 @@ def build_file_context(entities: List[Dict[str, str]], query_text: str = "") -> 
                     rag_data = acolbert.local_search(query_text or "summarize key points", top_k=3, file_hints=[os.path.basename(path)])
                     rag_results = rag_data.get("results", [])
                     if rag_results:
-                        prompt_context += f"\n--- Auto-ColBERT Context from {os.path.basename(path)} ---\n"
+                        prompt_context += f"\n\n[Attached Document Excerpts ({doc_label})]:\n"
                         for res in rag_results:
-                            prompt_context += f"{res.get('text', '')}\n"
+                            txt = res.get('text', '').strip()
+                            if txt:
+                                prompt_context += f"{txt}\n---\n"
                     else:
-                        prompt_context += f"\n--- Context from {path} (Preview) ---\n{content[:MAX_DIRECT_CONTEXT_CHARS]}\n"
+                        prompt_context += f"\n\n```document: {doc_label}\n{content[:MAX_DIRECT_CONTEXT_CHARS].strip()}\n```\n"
                 except Exception as e:
-                    print(f"⚠️ Auto-ColBERT indexing error: {e}. Falling back to preview.")
-                    prompt_context += f"\n--- Context from {path} (Preview) ---\n{content[:MAX_DIRECT_CONTEXT_CHARS]}\n"
+                    print(f"⚠️ ColBERT indexing error: {e}. Falling back to preview.")
+                    prompt_context += f"\n\n```document: {doc_label}\n{content[:MAX_DIRECT_CONTEXT_CHARS].strip()}\n```\n"
         except Exception as e:
             print(f"⚠️ Could not read file {path}: {e}")
 
@@ -303,9 +330,8 @@ def build_rag_context(query: str, entities: List[Dict[str, str]]) -> str:
         if entity.get("text")
     ]
 
-    # Import acolbert dynamically and run search locally
     try:
-        workspace_dir = "/home/overwatch886/team-codewatch-adtc-2026-submission"
+        workspace_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         if workspace_dir not in sys.path:
             sys.path.append(workspace_dir)
         import acolbert
@@ -318,16 +344,15 @@ def build_rag_context(query: str, entities: List[Dict[str, str]]) -> str:
         rag_data = {"message": f"Error loading index locally: {e}"}
 
     if not rag_results:
-        note = rag_data.get("message", "No ColBERT results returned.")
-        return f"\n--- RAG Note ---\n{note}\n"
+        return ""
 
-    chunks = ["\n--- ColBERT Retrieval Context ---"]
+    chunks = ["\n[Retrieved Reference Context]:\n"]
     for result in rag_results:
-        chunks.append(
-            f"[rank={result.get('rank', '?')} score={result.get('score', '?')} source={result.get('file', 'unknown')}]\n"
-            f"{result.get('text', '')}\n"
-        )
-    return "\n".join(chunks)
+        source_file = os.path.basename(result.get('file', 'document'))
+        text = result.get('text', '').strip()
+        if text:
+            chunks.append(f"```document: {source_file}\n{text}\n```")
+    return "\n\n".join(chunks)
 
 
 def extract_image_paths(

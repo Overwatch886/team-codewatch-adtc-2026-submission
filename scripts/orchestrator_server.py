@@ -11,8 +11,10 @@ import threading
 import re
 import soundfile as sf
 import psutil
-from fastapi import FastAPI, Request, HTTPException, Response
-from fastapi.responses import StreamingResponse, HTMLResponse
+import shutil
+import uuid
+from fastapi import FastAPI, Request, HTTPException, Response, UploadFile, File
+from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -1253,6 +1255,77 @@ async def audio_speech(request: Request):
         return Response(content=audio_data, media_type=media_type)
     except Exception as e:
         print(f"[Speech API Error] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+PARAKEET_BIN = str(Path(__file__).resolve().parent.parent / "software" / "parakeet.cpp" / "build" / "examples" / "cli" / "parakeet-cli")
+PARAKEET_MODEL = str(Path(__file__).resolve().parent.parent / "model" / "audio" / "tdt-0.6b-v2-q5_k.gguf")
+
+@app.post("/v1/audio/transcriptions")
+@app.post("/audio/transcriptions")
+async def audio_transcriptions(
+    file: UploadFile = File(None),
+    request: Request = None
+):
+    """
+    100% Offline Speech-to-Text Transcription endpoint powered by Parakeet TDT.
+    """
+    try:
+        content = None
+        filename = "recording.webm"
+        if file:
+            content = await file.read()
+            if file.filename:
+                filename = file.filename
+        elif request:
+            content = await request.body()
+
+        if not content:
+            raise HTTPException(status_code=400, detail="No audio data received")
+
+        # Choose model: prefer tdt-0.6b-v2-q5_k, fallback to SBPN model
+        asr_model = PARAKEET_MODEL
+        if not os.path.exists(asr_model):
+            alt_model = str(Path(__file__).resolve().parent.parent / "model" / "audio" / "SBPN_multilingual_large_q8_0.gguf")
+            if os.path.exists(alt_model):
+                asr_model = alt_model
+
+        if not os.path.exists(PARAKEET_BIN) or not os.path.exists(asr_model):
+            print(f"⚠️ STT Error: Parakeet bin ({PARAKEET_BIN}) or model ({asr_model}) not found.")
+            raise HTTPException(status_code=500, detail="Parakeet STT binary or model file not found on server")
+
+        temp_dir = tempfile.gettempdir()
+        raw_audio_path = os.path.join(temp_dir, f"stt_raw_{uuid.uuid4().hex[:8]}_{filename}")
+        wav_16k_path = os.path.join(temp_dir, f"stt_16k_{uuid.uuid4().hex[:8]}.wav")
+
+        with open(raw_audio_path, "wb") as f:
+            f.write(content)
+
+        # Convert incoming audio to 16kHz mono WAV for parakeet-cli using ffmpeg
+        ffmpeg_bin = shutil.which("ffmpeg") or "/usr/bin/ffmpeg"
+        if os.path.exists(ffmpeg_bin):
+            conv_cmd = [ffmpeg_bin, "-y", "-i", raw_audio_path, "-ar", "16000", "-ac", "1", wav_16k_path]
+            subprocess.run(conv_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            target_wav = wav_16k_path
+        else:
+            target_wav = raw_audio_path
+
+        cmd = [PARAKEET_BIN, "transcribe", "--model", asr_model, "--input", target_wav]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        
+        raw_text = res.stdout.strip()
+        clean_text = re.sub(r'<[^>]*>', '', raw_text).strip()
+
+        # Clean up temporary audio files
+        for p in [raw_audio_path, wav_16k_path]:
+            if os.path.exists(p):
+                try: os.remove(p)
+                except: pass
+
+        print(f"[STT Parakeet] Transcribed audio ({len(content)} bytes) -> {clean_text!r}")
+        return JSONResponse({"text": clean_text})
+
+    except Exception as e:
+        print(f"⚠️ Parakeet STT Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

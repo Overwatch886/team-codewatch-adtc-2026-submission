@@ -36,7 +36,7 @@ fi
 #   Vision calls (LFM2.5-VL 695MB + mmproj 583MB = ~1.28 GB):
 #   Resident model stays loaded → brief peak of ~3.8 GB (under 4 GB ceiling).
 
-export LLAMA_CTX_SIZE_GRANITE="4096"
+export LLAMA_CTX_SIZE_GRANITE="10240"
 export LLAMA_CTX_SIZE_QWEN="10240"
 export LLAMA_BATCH_SIZE="2048"
 export LLAMA_UBATCH_SIZE="512"

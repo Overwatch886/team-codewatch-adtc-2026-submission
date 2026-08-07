@@ -703,88 +703,88 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // Interactive Hands-Free Voice Mode (Web Speech API)
+    // Interactive Hands-Free Voice Mode (100% Offline Parakeet TDT STT)
     const micBtn = document.getElementById("mic-btn");
-    let recognition = null;
-    let isListening = false;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition && micBtn) {
-        recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = true;
-        recognition.lang = "en-US";
-
-        recognition.onstart = () => {
-            isListening = true;
-            micBtn.classList.add("active");
-            micBtn.title = "Listening... Speak your prompt! Click again to stop.";
-            chatInput.placeholder = "🎙️ Listening... Speak your prompt!";
-        };
-
-        recognition.onresult = (event) => {
-            let transcript = "";
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                transcript += event.results[i][0].transcript;
-            }
-            chatInput.value = transcript;
-        };
-
-        recognition.onerror = (event) => {
-            console.warn("Speech recognition error:", event.error);
-            stopListening();
-            if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-                alert("Microphone permission was denied. Please allow microphone access in your browser location bar (icon next to URL).");
-            } else if (event.error === "no-speech") {
-                chatInput.placeholder = "No speech detected. Click 🎙️ to try again.";
-            } else if (event.error !== "aborted") {
-                alert(`Voice Recognition Error: ${event.error}`);
-            }
-        };
-
-        recognition.onend = () => {
-            stopListening();
-            if (chatInput.value.trim().length > 0) {
-                chatInput.focus();
-                chatInput.placeholder = "Review your transcribed text above, edit if needed, and press Enter or click Send!";
-            }
-        };
-
-        function stopListening() {
-            isListening = false;
-            if (micBtn) {
-                micBtn.classList.remove("active");
-                micBtn.title = "Toggle Interactive Voice Mode (Hands-Free Dictation)";
-            }
-            chatInput.placeholder = "Ask a coding question, attach scripts/docs/screenshots, or click 🎙️ for Voice Mode...";
-        }
-
+    if (micBtn) {
         micBtn.addEventListener("click", async () => {
-            if (isListening) {
-                try { recognition.stop(); } catch (e) {}
-                stopListening();
+            if (isRecording) {
+                // Stop recording
+                if (mediaRecorder && mediaRecorder.state !== "inactive") {
+                    mediaRecorder.stop();
+                }
             } else {
-                chatInput.value = "";
-                // Explicitly request microphone permission first to ensure Chrome/Edge prompt user
+                // Start recording audio locally using HTML5 MediaRecorder API
                 try {
-                    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                        // Immediately close the test stream tracks
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    audioChunks = [];
+                    mediaRecorder = new MediaRecorder(stream);
+
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) audioChunks.push(e.data);
+                    };
+
+                    mediaRecorder.onstart = () => {
+                        isRecording = true;
+                        micBtn.classList.add("active");
+                        micBtn.title = "🎙️ Recording... Speak your prompt! Click again to transcribe with Parakeet.";
+                        chatInput.placeholder = "🎙️ Listening (100% Offline Parakeet TDT STT)... Speak now!";
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        isRecording = false;
+                        micBtn.classList.remove("active");
+                        micBtn.title = "Toggle Interactive Voice Mode (Parakeet TDT STT)";
+                        chatInput.placeholder = "⚙️ Transcribing via Parakeet TDT (Offline CPU)...";
+
+                        // Release microphone stream
                         stream.getTracks().forEach(track => track.stop());
-                    }
-                    recognition.start();
-                } catch (e) {
-                    console.error("Failed to start speech recognition / mic permission:", e);
+
+                        if (audioChunks.length === 0) {
+                            chatInput.placeholder = "Ask a coding question, attach scripts/docs/screenshots, or click 🎙️ for Voice Mode...";
+                            return;
+                        }
+
+                        const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+                        audioChunks = [];
+
+                        const formData = new FormData();
+                        formData.append("file", audioBlob, "recording.webm");
+
+                        try {
+                            const res = await fetch("/v1/audio/transcriptions", {
+                                method: "POST",
+                                body: formData
+                            });
+                            if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
+                            const data = await res.json();
+                            if (data.text && data.text.trim()) {
+                                const newText = data.text.trim();
+                                chatInput.value = chatInput.value ? (chatInput.value.trim() + " " + newText) : newText;
+                                chatInput.focus();
+                                chatInput.style.height = "auto";
+                                chatInput.style.height = (chatInput.scrollHeight - 16) + "px";
+                                chatInput.placeholder = "Review your transcribed text above, edit if needed, and press Enter or click Send!";
+                            } else {
+                                chatInput.placeholder = "No speech detected. Click 🎙️ to try again.";
+                            }
+                        } catch (err) {
+                            console.error("Parakeet STT transcription failed:", err);
+                            alert(`Offline Parakeet Transcription Error: ${err.message}`);
+                            chatInput.placeholder = "Ask a coding question, attach scripts/docs/screenshots, or click 🎙️ for Voice Mode...";
+                        }
+                    };
+
+                    mediaRecorder.start();
+                } catch (err) {
+                    console.error("Microphone access failed:", err);
                     alert("Microphone access is required for Voice Mode. Please ensure a microphone is connected and allowed in your browser settings.");
-                    stopListening();
                 }
             }
         });
-    } else if (micBtn) {
-        micBtn.addEventListener("click", () => {
-            alert("Speech recognition is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Brave for Web Speech API support.");
-        });
-        micBtn.title = "Speech recognition is not supported in this browser.";
     }
 
     // Copy button on rendered code blocks (event delegation)
