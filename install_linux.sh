@@ -126,9 +126,9 @@ has_vulkan_dev_support() {
 print_step 2 "Detecting GPU and selecting acceleration backend..."
 mkdir -p "$WORKSPACE_DIR/software"
 if [ ! -f "$WORKSPACE_DIR/software/llama.cpp/CMakeLists.txt" ]; then
-    echo "Cloning fresh llama.cpp repository..."
+    echo "Cloning fresh llama.cpp repository (shallow clone)..."
     rm -rf "$WORKSPACE_DIR/software/llama.cpp"
-    git clone https://github.com/ggerganov/llama.cpp "$WORKSPACE_DIR/software/llama.cpp"
+    git clone --depth 1 https://github.com/ggerganov/llama.cpp "$WORKSPACE_DIR/software/llama.cpp"
 fi
 
 GPU_TYPE="CPU"
@@ -183,12 +183,16 @@ if [ -f "$LLAMA_DIR/build/bin/llama-server" ]; then
 else
     cd "$LLAMA_DIR"
     rm -rf build
-    if ! cmake -B build $CMAKE_FLAGS || ! cmake --build build --config Release -j $(nproc); then
-        print_warning "Build with ${CMAKE_FLAGS} failed. Falling back to CPU build (-DGGML_NATIVE=ON)..."
-        rm -rf build
-        CMAKE_FLAGS="$(resolve_llama_flag NATIVE)"
-        cmake -B build $CMAKE_FLAGS
-        cmake --build build --config Release -j $(nproc)
+    # Target-specific build: compile ONLY llama-server, llama-cli, and llama-bench binaries for fast build speed
+    if ! cmake -B build $CMAKE_FLAGS || ! cmake --build build --config Release --target llama-server llama-cli llama-bench -j $(nproc) 2>/dev/null; then
+        if ! cmake --build build --config Release --target server main bench -j $(nproc) 2>/dev/null; then
+            print_warning "Build with ${CMAKE_FLAGS} failed. Falling back to CPU build (-DGGML_NATIVE=ON)..."
+            rm -rf build
+            CMAKE_FLAGS="$(resolve_llama_flag NATIVE)"
+            cmake -B build $CMAKE_FLAGS
+            cmake --build build --config Release --target llama-server llama-cli llama-bench -j $(nproc) 2>/dev/null || \
+            cmake --build build --config Release -j $(nproc)
+        fi
     fi
     print_success "llama.cpp built successfully."
 fi

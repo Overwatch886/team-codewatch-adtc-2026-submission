@@ -168,20 +168,20 @@ echo -e "${GREEN}Selected Acceleration Backend: ${SELECTED_BACKEND} (CMake Flags
 
 # 4. Build llama.cpp
 echo -e "\n${BLUE}[4/11] Building llama.cpp...${NC}"
-if [ -f "$WORKSPACE_DIR/software/llama.cpp/build/bin/llama-server" ]; then
-    echo -e "${GREEN}llama.cpp is already built. Skipping.${NC}"
-else
+    if [ ! -d "$WORKSPACE_DIR/software/llama.cpp" ]; then
+        git clone --depth 1 https://github.com/ggerganov/llama.cpp.git "$WORKSPACE_DIR/software/llama.cpp"
+    fi
     cd "$WORKSPACE_DIR/software/llama.cpp"
     rm -rf build
-    if ! cmake -B build $LLAMA_CMAKE_FLAGS; then
+    if ! cmake -B build $LLAMA_CMAKE_FLAGS || ! cmake --build build --config Release --target llama-server llama-cli llama-bench -j $(nproc) 2>/dev/null; then
         echo -e "${YELLOW}CMake configuration failed with ${LLAMA_CMAKE_FLAGS}. Falling back to CPU build (-DGGML_NATIVE=ON)...${NC}"
         rm -rf build
         LLAMA_CMAKE_FLAGS="$(resolve_llama_flag NATIVE)"
         cmake -B build $LLAMA_CMAKE_FLAGS
+        cmake --build build --config Release --target llama-server llama-cli llama-bench -j $(nproc) 2>/dev/null || \
+        cmake --build build --config Release -j $(nproc)
     fi
-    cmake --build build --config Release -j $(nproc)
     cd "$WORKSPACE_DIR"
-fi
 
 # 5. Create Python venv
 echo -e "\n${BLUE}[5/11] Setting up Python environment...${NC}"
