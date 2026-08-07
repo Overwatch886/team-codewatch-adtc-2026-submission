@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 # Ensure workspace is in python path for any workspace-relative imports
-WORKSPACE_DIR = "."
+WORKSPACE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if WORKSPACE_DIR not in sys.path:
     sys.path.append(WORKSPACE_DIR)
 
@@ -69,10 +69,10 @@ def get_kokoro():
             if kokoro_instance is None:
                 import onnxruntime as rt
                 from kokoro_onnx import Kokoro
-                model_path = os.path.join(WORKSPACE_DIR, "models/audio/kokoro/kokoro-v1.0.onnx")
+                model_path = os.path.join(WORKSPACE_DIR, "model/kokoro/kokoro-v1.0.onnx")
                 if not os.path.exists(model_path):
-                    model_path = os.path.join(WORKSPACE_DIR, "models/audio/kokoro/kokoro-v1.0.int8.onnx")
-                voices_path = os.path.join(WORKSPACE_DIR, "models/audio/kokoro/voices-v1.0.bin")
+                    model_path = os.path.join(WORKSPACE_DIR, "model/kokoro/kokoro-v1.0.int8.onnx")
+                voices_path = os.path.join(WORKSPACE_DIR, "model/kokoro/voices-v1.0.bin")
                 if not os.path.exists(model_path) or not os.path.exists(voices_path):
                     print(f"[ServerTTS Error] Kokoro model or voices missing. Path: {model_path}", file=sys.stderr)
                     return None

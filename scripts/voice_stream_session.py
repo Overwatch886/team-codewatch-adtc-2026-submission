@@ -14,9 +14,9 @@ from kokoro_onnx import Kokoro
 # Configuration Paths
 WORKSPACE_DIR = "/home/overwatch886/team-codewatch-adtc-2026-submission"
 PARAKEET_BIN = f"{WORKSPACE_DIR}/software/parakeet.cpp/build/examples/cli/parakeet-cli"
-ASR_MODEL = f"{WORKSPACE_DIR}/models/audio/SBPN_multilingual_large_q8_0.gguf"
-KOKORO_MODEL = f"{WORKSPACE_DIR}/models/audio/kokoro/kokoro-v1.0.onnx"
-KOKORO_VOICES = f"{WORKSPACE_DIR}/models/audio/kokoro/voices-v1.0.bin"
+ASR_MODEL = f"{WORKSPACE_DIR}/model/nemotron-3.5-asr-streaming-0.6b-q5_k.gguf"
+KOKORO_MODEL = f"{WORKSPACE_DIR}/model/kokoro/kokoro-v1.0.onnx"
+KOKORO_VOICES = f"{WORKSPACE_DIR}/model/kokoro/voices-v1.0.bin"
 ORCHESTRATOR_URL = "http://localhost:8085/v1/chat/completions"
 AUDIO_RECORD_FILE = "/tmp/voice_session_user.wav"
 

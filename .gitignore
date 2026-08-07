@@ -39,3 +39,6 @@ key.pub
 
 # llama.cpp
 software/llama.cpp
+
+# Other folders
+scratch/

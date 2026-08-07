@@ -63,7 +63,7 @@ def init_intent_embeddings():
         return
     print("[Orchestrator] Pre-encoding ColBERT intent descriptions...")
     # Override MODEL_DIR to absolute path so it runs correctly regardless of cwd
-    acolbert.MODEL_DIR = "/home/overwatch886/team-codewatch-adtc-2026-submission/answerai-colbert-small-v1"
+    acolbert.MODEL_DIR = os.path.join(WORKSPACE_DIR, "model", "answerai-colbert-small-v1")
     for intent, desc in INTENT_DESCRIPTIONS.items():
         encoded_intents[intent] = acolbert.encode(desc)
     print("[Orchestrator] Intent descriptions encoded successfully.")

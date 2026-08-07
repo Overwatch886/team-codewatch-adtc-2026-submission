@@ -20,7 +20,7 @@ import pathlib
 # All paths are relative to this file's location (repo root)
 _HERE = pathlib.Path(__file__).resolve().parent
 
-MODEL_DIR = str(os.getenv("COLBERT_MODEL_DIR") or _HERE / "answerai-colbert-small-v1")
+MODEL_DIR = str(os.getenv("COLBERT_MODEL_DIR") or _HERE / "model" / "answerai-colbert-small-v1")
 MODEL_FILE = "model_int8.onnx"
 
 RETRIEVAL_DIR = str(os.getenv("COLBERT_RETRIEVAL_DIR") or _HERE / "scripts")
