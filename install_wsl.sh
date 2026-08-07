@@ -246,7 +246,7 @@ if audit_model_file "$GRANITE_DIR/granite-4.1-3b-Q4_K_M.gguf" 1000000000; then
     echo -e "${GREEN}Granite 4.1 3B model is already fully downloaded (${GRANITE_DIR}/granite-4.1-3b-Q4_K_M.gguf). Skipping.${NC}"
 else
     echo -e "${YELLOW}Granite model missing or incomplete. Downloading...${NC}"
-    hf_download ibm-granite/granite-4.1-3b-instruct-GGUF granite-4.1-3b-Q4_K_M.gguf --local-dir "$GRANITE_DIR"
+    hf_download ibm-granite/granite-4.1-3b-GGUF granite-4.1-3b-Q4_K_M.gguf --local-dir "$GRANITE_DIR"
 fi
 
 # 8. Download Qwen 2.5 Coder 3B model

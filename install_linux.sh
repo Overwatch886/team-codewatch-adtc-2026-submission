@@ -274,7 +274,7 @@ mkdir -p "$GRANITE_DIR"
 if audit_model_file "$GRANITE_DIR/granite-4.1-3b-Q4_K_M.gguf" 1000000000; then
     print_success "Granite model already exists and is complete."
 else
-    hf_download ibm-granite/granite-4.1-3b-instruct-GGUF granite-4.1-3b-Q4_K_M.gguf --local-dir "$GRANITE_DIR"
+    hf_download ibm-granite/granite-4.1-3b-GGUF granite-4.1-3b-Q4_K_M.gguf --local-dir "$GRANITE_DIR"
     print_success "Granite model downloaded."
 fi
 

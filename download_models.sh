@@ -72,7 +72,7 @@ echo ""
 # [1/5] Granite 4.1 3B Q4_K_M — Socratic Tutor / Auto mode
 info "[1/5] Granite 4.1 3B (Socratic Tutor / Auto mode)"
 hf_download \
-    "ibm-granite/granite-4.1-3b-instruct-GGUF" \
+    "ibm-granite/granite-4.1-3b-GGUF" \
     "granite-4.1-3b-Q4_K_M.gguf" \
     "$MODEL_DIR/granite/granite-4.1-3b-Q4_K_M.gguf"
 
