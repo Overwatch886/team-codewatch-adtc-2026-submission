@@ -211,6 +211,22 @@ audit_model_file() {
     return 1
 }
 
+# Helper for HuggingFace download (tries new 'hf' CLI first, falls back to 'huggingface-cli')
+hf_download() {
+    local venv_bin="$WORKSPACE_DIR/venv/bin"
+    if [ -x "$venv_bin/hf" ]; then
+        "$venv_bin/hf" download "$@"
+    elif command -v hf >/dev/null 2>&1; then
+        hf download "$@"
+    elif [ -x "$venv_bin/huggingface-cli" ]; then
+        "$venv_bin/huggingface-cli" download "$@"
+    elif command -v huggingface-cli >/dev/null 2>&1; then
+        huggingface-cli download "$@"
+    else
+        python3 -m huggingface_hub.cli.hf_api download "$@"
+    fi
+}
+
 # 6. Download ColBERT model
 echo -e "\n${BLUE}[6/11] Auditing and downloading ColBERT model...${NC}"
 COLBERT_DIR="$WORKSPACE_DIR/model/answerai-colbert-small-v1"
@@ -219,7 +235,7 @@ if audit_model_file "$COLBERT_DIR/model_int8.onnx" 10000000; then
     echo -e "${GREEN}ColBERT model is already fully downloaded (${COLBERT_DIR}/model_int8.onnx). Skipping.${NC}"
 else
     echo -e "${YELLOW}ColBERT model missing or incomplete. Downloading...${NC}"
-    huggingface-cli download answerdotai/answerai-colbert-small-v1 --local-dir "$COLBERT_DIR"
+    hf_download answerdotai/answerai-colbert-small-v1 --local-dir "$COLBERT_DIR"
 fi
 
 # 7. Download Granite 4.1 3B model
@@ -230,7 +246,7 @@ if audit_model_file "$GRANITE_DIR/granite-4.1-3b-Q4_K_M.gguf" 1000000000; then
     echo -e "${GREEN}Granite 4.1 3B model is already fully downloaded (${GRANITE_DIR}/granite-4.1-3b-Q4_K_M.gguf). Skipping.${NC}"
 else
     echo -e "${YELLOW}Granite model missing or incomplete. Downloading...${NC}"
-    huggingface-cli download ibm-granite/granite-4.1-3b-instruct-GGUF granite-4.1-3b-Q4_K_M.gguf --local-dir "$GRANITE_DIR"
+    hf_download ibm-granite/granite-4.1-3b-instruct-GGUF granite-4.1-3b-Q4_K_M.gguf --local-dir "$GRANITE_DIR"
 fi
 
 # 8. Download Qwen 2.5 Coder 3B model
@@ -241,7 +257,7 @@ if audit_model_file "$QWEN_DIR/qwen2.5-coder-3b-instruct-q4_k_m.gguf" 1000000000
     echo -e "${GREEN}Qwen 2.5 Coder 3B model is already fully downloaded (${QWEN_DIR}/qwen2.5-coder-3b-instruct-q4_k_m.gguf). Skipping.${NC}"
 else
     echo -e "${YELLOW}Qwen model missing or incomplete. Downloading...${NC}"
-    huggingface-cli download Qwen/Qwen2.5-Coder-3B-Instruct-GGUF qwen2.5-coder-3b-instruct-q4_k_m.gguf --local-dir "$QWEN_DIR"
+    hf_download Qwen/Qwen2.5-Coder-3B-Instruct-GGUF qwen2.5-coder-3b-instruct-q4_k_m.gguf --local-dir "$QWEN_DIR"
 fi
 
 # 9. Fix hardcoded paths across scripts

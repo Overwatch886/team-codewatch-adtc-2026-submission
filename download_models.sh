@@ -50,8 +50,8 @@ hf_download() {
     if [[ -f "$dest" ]]; then skip "$(basename "$dest") already exists."; return 0; fi
     info "Downloading $(basename "$dest") from HuggingFace (${repo})…"
     HF_CLI=""
-    for c in "$HERE/venv/bin/huggingface-cli" "$HOME/.local/bin/huggingface-cli" \
-              "$(command -v huggingface-cli 2>/dev/null || true)"; do
+    for c in "$HERE/venv/bin/hf" "$HERE/venv/bin/huggingface-cli" "$HOME/.local/bin/hf" "$HOME/.local/bin/huggingface-cli" \
+              "$(command -v hf 2>/dev/null || true)" "$(command -v huggingface-cli 2>/dev/null || true)"; do
         [[ -x "$c" ]] && { HF_CLI="$c"; break; }
     done
     if [[ -n "$HF_CLI" ]]; then

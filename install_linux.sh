@@ -240,6 +240,22 @@ audit_model_file() {
     return 1
 }
 
+# Helper for HuggingFace download (tries new 'hf' CLI first, falls back to 'huggingface-cli')
+hf_download() {
+    local venv_bin="$WORKSPACE_DIR/venv/bin"
+    if [ -x "$venv_bin/hf" ]; then
+        "$venv_bin/hf" download "$@"
+    elif command -v hf >/dev/null 2>&1; then
+        hf download "$@"
+    elif [ -x "$venv_bin/huggingface-cli" ]; then
+        "$venv_bin/huggingface-cli" download "$@"
+    elif command -v huggingface-cli >/dev/null 2>&1; then
+        huggingface-cli download "$@"
+    else
+        python3 -m huggingface_hub.cli.hf_api download "$@"
+    fi
+}
+
 # [6/11] Download ColBERT model
 print_step 6 "Downloading ColBERT semantic search model..."
 COLBERT_DIR="$WORKSPACE_DIR/model/answerai-colbert-small-v1"
@@ -247,7 +263,7 @@ mkdir -p "$COLBERT_DIR"
 if audit_model_file "$COLBERT_DIR/model_int8.onnx" 10000000; then
     print_success "ColBERT model already exists and is complete."
 else
-    "$WORKSPACE_DIR/venv/bin/huggingface-cli" download answerdotai/answerai-colbert-small-v1 --local-dir "$COLBERT_DIR"
+    hf_download answerdotai/answerai-colbert-small-v1 --local-dir "$COLBERT_DIR"
     print_success "ColBERT model downloaded."
 fi
 
@@ -258,7 +274,7 @@ mkdir -p "$GRANITE_DIR"
 if audit_model_file "$GRANITE_DIR/granite-4.1-3b-Q4_K_M.gguf" 1000000000; then
     print_success "Granite model already exists and is complete."
 else
-    "$WORKSPACE_DIR/venv/bin/huggingface-cli" download ibm-granite/granite-4.1-3b-instruct-GGUF granite-4.1-3b-Q4_K_M.gguf --local-dir "$GRANITE_DIR"
+    hf_download ibm-granite/granite-4.1-3b-instruct-GGUF granite-4.1-3b-Q4_K_M.gguf --local-dir "$GRANITE_DIR"
     print_success "Granite model downloaded."
 fi
 
@@ -269,7 +285,7 @@ mkdir -p "$QWEN_DIR"
 if audit_model_file "$QWEN_DIR/qwen2.5-coder-3b-instruct-q4_k_m.gguf" 1000000000; then
     print_success "Qwen model already exists and is complete."
 else
-    "$WORKSPACE_DIR/venv/bin/huggingface-cli" download Qwen/Qwen2.5-Coder-3B-Instruct-GGUF qwen2.5-coder-3b-instruct-q4_k_m.gguf --local-dir "$QWEN_DIR"
+    hf_download Qwen/Qwen2.5-Coder-3B-Instruct-GGUF qwen2.5-coder-3b-instruct-q4_k_m.gguf --local-dir "$QWEN_DIR"
 fi
 
 # [9/11] Fix hardcoded paths across scripts
