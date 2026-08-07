@@ -183,13 +183,13 @@ if [ -f "$LLAMA_DIR/build/bin/llama-server" ]; then
 else
     cd "$LLAMA_DIR"
     rm -rf build
-    if ! cmake -B build $CMAKE_FLAGS; then
-        print_warning "Build failed with ${CMAKE_FLAGS}. Falling back to CPU build (-DGGML_NATIVE=ON)..."
+    if ! cmake -B build $CMAKE_FLAGS || ! cmake --build build --config Release -j $(nproc); then
+        print_warning "Build with ${CMAKE_FLAGS} failed. Falling back to CPU build (-DGGML_NATIVE=ON)..."
         rm -rf build
         CMAKE_FLAGS="$(resolve_llama_flag NATIVE)"
         cmake -B build $CMAKE_FLAGS
+        cmake --build build --config Release -j $(nproc)
     fi
-    cmake --build . --config Release -j $(nproc)
     print_success "llama.cpp built successfully."
 fi
 cd "$WORKSPACE_DIR"

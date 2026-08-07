@@ -71,12 +71,26 @@ def get_kokoro():
             if kokoro_instance is None:
                 import onnxruntime as rt
                 from kokoro_onnx import Kokoro
-                model_path = os.path.join(WORKSPACE_DIR, "model/kokoro/kokoro-v1.0.onnx")
-                if not os.path.exists(model_path):
-                    model_path = os.path.join(WORKSPACE_DIR, "model/kokoro/kokoro-v1.0.int8.onnx")
-                voices_path = os.path.join(WORKSPACE_DIR, "model/kokoro/voices-v1.0.bin")
+                # Search candidate paths for Kokoro model and voices
+                model_candidates = [
+                    str(Path(WORKSPACE_DIR) / "model" / "audio" / "kokoro" / "kokoro-v1.0.onnx"),
+                    str(Path(WORKSPACE_DIR) / "models" / "audio" / "kokoro" / "kokoro-v1.0.onnx"),
+                    str(Path(WORKSPACE_DIR) / "model" / "kokoro" / "kokoro-v1.0.onnx"),
+                    str(Path(WORKSPACE_DIR) / "models" / "kokoro" / "kokoro-v1.0.onnx"),
+                    str(Path(WORKSPACE_DIR) / "model" / "audio" / "kokoro" / "kokoro-v1.0.int8.onnx"),
+                    str(Path(WORKSPACE_DIR) / "models" / "audio" / "kokoro" / "kokoro-v1.0.int8.onnx"),
+                    str(Path(WORKSPACE_DIR) / "model" / "kokoro" / "kokoro-v1.0.int8.onnx"),
+                ]
+                voices_candidates = [
+                    str(Path(WORKSPACE_DIR) / "model" / "audio" / "kokoro" / "voices-v1.0.bin"),
+                    str(Path(WORKSPACE_DIR) / "models" / "audio" / "kokoro" / "voices-v1.0.bin"),
+                    str(Path(WORKSPACE_DIR) / "model" / "kokoro" / "voices-v1.0.bin"),
+                    str(Path(WORKSPACE_DIR) / "models" / "kokoro" / "voices-v1.0.bin"),
+                ]
+                model_path = next((p for p in model_candidates if os.path.exists(p)), model_candidates[0])
+                voices_path = next((p for p in voices_candidates if os.path.exists(p)), voices_candidates[0])
                 if not os.path.exists(model_path) or not os.path.exists(voices_path):
-                    print(f"[ServerTTS Error] Kokoro model or voices missing. Path: {model_path}", file=sys.stderr)
+                    print(f"[ServerTTS Error] Kokoro model or voices missing. Paths checked: {model_path}, {voices_path}", file=sys.stderr)
                     return None
                 opts = rt.SessionOptions()
                 opts.intra_op_num_threads = 6
