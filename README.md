@@ -1,30 +1,30 @@
-# 🎓 Code Persona / Antigravity CodeLab — Offline Voice-Driven AI Pair Programmer & Tutor
+# Professor Lowacode / — Offline Coding Tutor and Assistant
 
 > **Africa Deep Tech Challenge 2026 Submission** | **Track:** `coding_assistants` | **Team:** `code-persona`
 
-Code Persona (Antigravity CodeLab) is a 100% offline, privacy-first AI Pair Programmer and Socratic Coding Tutor engineered to run under a **hard 4 GB RAM ceiling** on budget laptops with integrated graphics.
+Professor Lowacode is a 100% offline AI Pair Programmer and Socratic Coding Tutor built to run on 8gb RAM systems with only CPUs and integrated graphics.
 
 ---
 
-## 🌟 Key Features & Capabilities
+## Key Features
 
-- **🧠 Dual Reasoning Engine**:
+- **Dual Study Mode**:
   - **Granite 4.1 3B (`Q4_K_M`)**: Primary Socratic Tutor model for step-by-step guidance and debugging without full-code spoilers (4,096 context window).
   - **Qwen 2.5 Coder 3B (`Q4_K_M`)**: Fast Ship coding model for direct generation with an expanded **10,240 (10k) token context window**.
-- **🛡️ Hard 4 GB RAM Ceiling Guard**: Enforces systemd cgroup bounds (`MemoryMax=4G`, `MemoryHigh=3.7G`) to keep the orchestrator, model server, and RAG search strictly bounded.
-- **🎙️ Parakeet TDT Push-to-Talk STT & User Review**: Speech is transcribed directly into the input box using Parakeet TDT, allowing users to review and edit prompts before sending.
-- **🎓 3-Mode Socratic Mentorship (GBNF Grammar Constrained)**:
+- **Hard 4 GB RAM Ceiling Guard**: Enforces systemd cgroup bounds (`MemoryMax=4G`, `MemoryHigh=3.7G`) to keep the orchestrator, model server, and RAG search strictly bounded.
+- **Parakeet TDT Push-to-Talk STT & User Review**: Speech is transcribed directly into the input box using Parakeet TDT, allowing users to review and edit prompts before sending.
+- **3-Mode Socratic Mentorship (GBNF Grammar Constrained)**:
   1. *Step-by-Step Tutor*: Outputs Step 1 + actionable task without full-code spoilers, constrained via GBNF grammar.
   2. *Traceback Diagnostic*: Explains Python/C/JS errors in plain English and gives actionable hints.
   3. *Code Review & Refactoring*: Evaluates code readability, edge cases, and performance.
-- **📄 Adaptive Multi-Format Document Ingestion**: Attach `.py`, `.js`, `.json`, `.md`, `.txt`, `.docx` (Microsoft Word), or `.pdf` files.
+- **Adaptive Multi-Format Document Ingestion**: Attach `.py`, `.js`, `.json`, `.md`, `.txt`, `.docx` (Microsoft Word), or `.pdf` files.
   - Small files (≤ 1,500 words) load directly into the context window.
   - Large files (> 1,500 words) are automatically indexed on-the-fly via ColBERT in ~0.25s.
-- **⚙️ Real-Time Telemetry & Precise Memory Accounting**: Tracks OS Baseline, Active Model RAM (`RssAnon`), llama.cpp engine, and dynamic GGUF disk sizes in real time via `/api/metrics`.
+- **Real-Time Telemetry & Precise Memory Accounting**: Tracks OS Baseline, Active Model RAM (`RssAnon`), llama.cpp engine, and dynamic GGUF disk sizes in real time via `/api/metrics`.
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```
 code-persona-adtc-2026-submission/
@@ -52,7 +52,7 @@ code-persona-adtc-2026-submission/
 
 ---
 
-## 🚀 Quick Start Guide
+## Quick Start Guide
 
 ### 1. Download Model Weights
 Run the supporting model downloader to fetch Granite 4.1 3B, Qwen 2.5 Coder 3B, and ColBERT weights:
@@ -73,7 +73,7 @@ For native Linux (Ubuntu, Debian, Fedora, Arch):
 ./install_linux.sh
 ```
 
-For Windows users running WSL2:
+For Windows users running WSL2(WSl2 has to have been setup with Ubuntu 22.04):
 ```bash
 ./install_wsl.sh
 ```
@@ -89,13 +89,13 @@ Navigate to `http://localhost:8085` in your browser. (If using WSL2, open `http:
 
 ---
 
-## 📊 Benchmarks & Memory Breakdown
+## Benchmarks & Memory Breakdown
 
 Tested under **Hard 4 GB RAM Ceiling** (`MemoryMax=4G`):
 
 | Component | Target / Config | Resident Memory / Details |
 | :--- | :--- | :--- |
-| **Granite 4.1 3B** | `Q4_K_M` (Socratic Mode) | **~1.96 GB** on disk (mmap + `--mlock`), 4,096 ctx |
+| **Granite 4.1 3B** | `Q4_K_M` (Socratic Mode) | **~1.96 GB** on disk (mmap + `--mlock`), 10,240 ctx |
 | **Qwen 2.5 Coder 3B** | `Q4_K_M` (Fast Ship Mode) | **~1.96 GB** on disk (mmap + `--mlock`), 10,240 (10k) ctx |
 | **ColBERT RAG** | ONNX Late-Interaction | **~200 MB** resident |
 | **Orchestrator FastAPI** | Uvicorn | **~40 MB** resident |
@@ -103,7 +103,7 @@ Tested under **Hard 4 GB RAM Ceiling** (`MemoryMax=4G`):
 
 ---
 
-## 📄 License & Attribution
+## License & Attribution
 
 Licensed under [GNU General Public License v3.0](LICENSE).  
 Built for the **Africa Deep Tech Challenge 2026**.
