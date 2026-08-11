@@ -282,6 +282,7 @@ if audit_model_file "$QWEN_DIR/qwen2.5-coder-3b-instruct-q4_k_m.gguf" 1000000000
     print_success "Qwen model already exists and is complete."
 else
     hf_download Qwen/Qwen2.5-Coder-3B-Instruct-GGUF qwen2.5-coder-3b-instruct-q4_k_m.gguf --local-dir "$QWEN_DIR"
+    print_success "Qwen model downloaded."
 fi
 
 # [9/11] Fix hardcoded paths across scripts
