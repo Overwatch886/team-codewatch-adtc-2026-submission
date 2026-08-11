@@ -212,15 +212,12 @@ print_step 5 "Installing Python requirements..."
 source "$WORKSPACE_DIR/venv/bin/activate"
 pip install --upgrade pip
 
-if [ "$GPU_TYPE" = "CPU" ] || [ "$GPU_TYPE" = "INTEL" ]; then
-    pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu || pip install -r requirements.txt
-elif [ "$GPU_TYPE" = "AMD" ]; then
-    pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/rocm5.6 || pip install -r requirements.txt
-else
-    pip install -r requirements.txt
-fi
-pip install huggingface_hub psutil
-print_success "Python requirements installed."
+case "$GPU_TYPE" in
+    NVIDIA) pip install onnxruntime-gpu || pip install onnxruntime ;;
+    AMD)    pip install onnxruntime-rocm -f https://repo.radeon.com/rocm/manylinux/rocm-rel-6.2/ || pip install onnxruntime ;;
+    INTEL)  pip install onnxruntime-openvino || pip install onnxruntime ;;
+    *)      pip install onnxruntime ;;
+esac
 
 # Helper for model auditing
 audit_model_file() {
