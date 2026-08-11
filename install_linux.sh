@@ -212,10 +212,6 @@ print_step 5 "Installing Python requirements..."
 source "$WORKSPACE_DIR/venv/bin/activate"
 pip install --upgrade pip
 
-if [ -f "$WORKSPACE_DIR/requirements.txt" ]; then
-    pip install -r requirements.txt
-fi
-
 if [ "$GPU_TYPE" = "CPU" ] || [ "$GPU_TYPE" = "INTEL" ]; then
     pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu || pip install -r requirements.txt
 elif [ "$GPU_TYPE" = "AMD" ]; then
