@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e
 set -u
+set -o pipefail
 
 # ==============================================================================
 # LowaCode AI Tutor - System Performance Tuning Script
@@ -17,7 +18,7 @@ log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-log_step() { echo -e "\n${BLUE}=== [$step/$TOTAL_STEPS] $1 ===${NC}"; ((step++)); }
+log_step() { echo -e "\n${BLUE}=== [$step/$TOTAL_STEPS] $1 ===${NC}"; step=$((step + 1)); }
 
 step=1
 TOTAL_STEPS=6
@@ -54,7 +55,7 @@ current_shm=$(df -h /dev/shm | awk 'NR==2 {print $2}')
 log_info "Current /dev/shm size: $current_shm"
 
 if grep -q "tmpfs.*/dev/shm" /etc/fstab; then
-    if grep -q "size=4g" /etc/fstab; then
+    if grep "tmpfs.*/dev/shm" /etc/fstab | grep -q "size=4g"; then
         log_info "/dev/shm is already configured for 4GB in /etc/fstab"
         add_skipped "Shared Memory (/dev/shm)"
     else
@@ -83,47 +84,74 @@ if $IS_WSL2; then
     echo -e "${YELLOW}[wsl2]\nmemory=8GB\nswap=12GB${NC}"
     add_skipped "Swap Memory (WSL2 requires manual Windows config)"
 else
-    DESIRED_SWAP_BYTES=$((12 * 1024 * 1024 * 1024))
-    needs_swap=true
+    DESIRED_SWAP_GB=12
+    DESIRED_SWAP_BYTES=$((DESIRED_SWAP_GB * 1024 * 1024 * 1024))
 
-    if [[ -f /swapfile ]]; then
-        swap_size=$(stat -c "%s" /swapfile 2>/dev/null || echo 0)
-        if [[ $swap_size -ge $DESIRED_SWAP_BYTES ]]; then
-            log_info "Swap file /swapfile already exists and is >= 12GB."
-            needs_swap=false
-            add_skipped "Swap Memory (already >= 12GB)"
-        else
-            log_info "Existing /swapfile is smaller than 12GB. Removing it..."
-            if grep -q "/swapfile" /proc/swaps; then
-                swapoff /swapfile || true
-            fi
-            rm -f /swapfile
-        fi
+    # --- Check total active swap across ALL sources (partitions + files) ---
+    # 'free' reports in kibibytes; multiply by 1024 to get bytes.
+    current_swap_kb=$(free -k | awk '/^Swap:/ {print $2}')
+    current_swap_bytes=$(( current_swap_kb * 1024 ))
+    current_swap_human=$(free -h | awk '/^Swap:/ {print $2}')
+
+    log_info "Currently active swap (all sources): $current_swap_human"
+    if [[ -s /proc/swaps ]]; then
+        log_info "Active swap sources:"
+        awk 'NR>1 {printf "  %-40s type=%-10s size=%s kB\n", $1, $2, $3}' /proc/swaps
     fi
 
-    if $needs_swap; then
-        log_info "Creating 12GB /swapfile..."
-        if ! fallocate -l 12G /swapfile 2>/dev/null; then
-            log_warn "fallocate failed, falling back to dd (this will take a while)..."
-            dd if=/dev/zero of=/swapfile bs=1G count=12 status=progress
-        fi
-        
-        chmod 600 /swapfile
-        mkswap /swapfile
-        swapon /swapfile
-        log_success "12GB /swapfile created and activated."
-        add_changed "Swap Memory (12GB swapfile created)"
-    fi
-
-    if ! grep -q "/swapfile.*swap" /etc/fstab; then
-        echo "/swapfile none swap sw 0 0" >> /etc/fstab
-        log_success "Added /swapfile to /etc/fstab for persistence."
+    if [[ $current_swap_bytes -ge $DESIRED_SWAP_BYTES ]]; then
+        log_info "Total swap is already >= ${DESIRED_SWAP_GB}GB. No changes needed."
+        add_skipped "Swap Memory (already >= ${DESIRED_SWAP_GB}GB across all sources)"
     else
-        log_info "/swapfile is already in /etc/fstab."
+        log_info "Total swap is below ${DESIRED_SWAP_GB}GB. Checking /swapfile..."
+        needs_swap=true
+
+        if [[ -f /swapfile ]]; then
+            swapfile_size=$(stat -c "%s" /swapfile 2>/dev/null || echo 0)
+            if [[ $swapfile_size -ge $DESIRED_SWAP_BYTES ]]; then
+                # File exists and is large enough but may not be active
+                log_info "/swapfile is >= ${DESIRED_SWAP_GB}GB but may not be active. Activating..."
+                if ! grep -q "/swapfile" /proc/swaps; then
+                    swapon /swapfile
+                    log_success "/swapfile activated."
+                    add_changed "Swap Memory (/swapfile re-activated)"
+                else
+                    log_info "/swapfile is already active."
+                    add_skipped "Swap Memory (/swapfile already active)"
+                fi
+                needs_swap=false
+            else
+                log_info "Existing /swapfile is smaller than ${DESIRED_SWAP_GB}GB ($(( swapfile_size / 1024 / 1024 / 1024 ))GB). Removing it to recreate..."
+                if grep -q "/swapfile" /proc/swaps; then
+                    swapoff /swapfile || true
+                fi
+                rm -f /swapfile
+            fi
+        fi
+
+        if $needs_swap; then
+            log_info "Creating ${DESIRED_SWAP_GB}GB /swapfile..."
+            if ! fallocate -l "${DESIRED_SWAP_GB}G" /swapfile 2>/dev/null; then
+                log_warn "fallocate failed, falling back to dd (this will take a while)..."
+                dd if=/dev/zero of=/swapfile bs=1G count="$DESIRED_SWAP_GB" status=progress
+            fi
+            chmod 600 /swapfile
+            mkswap /swapfile
+            swapon /swapfile
+            log_success "${DESIRED_SWAP_GB}GB /swapfile created and activated."
+            add_changed "Swap Memory (${DESIRED_SWAP_GB}GB swapfile created)"
+        fi
+
+        if ! grep -q "/swapfile.*swap" /etc/fstab; then
+            echo "/swapfile none swap sw 0 0" >> /etc/fstab
+            log_success "Added /swapfile to /etc/fstab for persistence."
+        else
+            log_info "/swapfile is already in /etc/fstab."
+        fi
     fi
-    
-    current_swap=$(free -h | grep -i swap | awk '{print $2}')
-    log_info "Current Total Swap: $current_swap"
+
+    new_swap_human=$(free -h | awk '/^Swap:/ {print $2}')
+    log_info "Total Swap after step: $new_swap_human"
 fi
 
 
@@ -140,10 +168,19 @@ check_and_set_sysctl() {
     current=$(sysctl -n "$key" 2>/dev/null || echo "not_set")
     
     log_info "$key is currently $current"
+    if [[ "$current" == "not_set" ]]; then
+        log_warn "$key does not exist on this kernel. Skipping."
+        add_skipped "Kernel setting $key (unsupported)"
+        return
+    fi
     if [[ "$current" != "$expected" ]]; then
-        sysctl -w "$key=$expected" >/dev/null
-        update_sysctl=true
-        add_changed "Kernel setting $key=$expected"
+        if sysctl -w "$key=$expected" >/dev/null 2>&1; then
+            update_sysctl=true
+            add_changed "Kernel setting $key=$expected"
+        else
+            log_warn "Failed to set $key=$expected"
+            add_skipped "Kernel setting $key (failed)"
+        fi
     else
         add_skipped "Kernel setting $key"
     fi
@@ -172,7 +209,6 @@ fi
 log_step "Configuring Memlock Limits"
 
 LIMITS_CONF="/etc/security/limits.d/99-llm-memlock.conf"
-MEMLOCK_CHANGED=false
 
 if [[ -f "$LIMITS_CONF" ]] && grep -q "$REAL_USER.*memlock.*unlimited" "$LIMITS_CONF"; then
     log_info "Memlock is already unlimited for user $REAL_USER in $LIMITS_CONF"
@@ -211,6 +247,17 @@ for governor in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
         echo performance > "$governor"
     fi
 done
+
+# Apply RyzenAdj power limits (22W, 82°C throttle)
+# These settings do not survive reboot, so they must be reapplied on every boot
+if command -v ryzenadj &> /dev/null; then
+    ryzenadj \
+        --stapm-limit=22000 \
+        --fast-limit=22000 \
+        --slow-limit=22000 \
+        --tctl-temp=82 \
+        2>/dev/null || true
+fi
 EOF
     chmod +x "$SERVICE_SCRIPT"
 
@@ -250,11 +297,21 @@ if $IS_WSL2; then
     add_skipped "RyzenAdj (WSL2)"
 else
     if command -v ryzenadj &> /dev/null; then
-        log_info "RyzenAdj found. Attempting to set power limits..."
-        # Wrap in a safe check
-        if ryzenadj --stapm-limit=45000 --fast-limit=45000 --slow-limit=45000 >/dev/null 2>&1; then
-            log_success "RyzenAdj power limits applied successfully."
-            add_changed "RyzenAdj limits"
+        log_info "RyzenAdj found. Applying power limits for this session..."
+        # Units are milliwatts: 22000 = 22W
+        # --stapm-limit : sustained (skin temperature aware) power limit
+        # --fast-limit  : peak/burst power limit (short duration boost)
+        # --slow-limit  : average power limit over a longer window
+        # --tctl-temp   : CPU die thermal throttle ceiling in °C
+        if ryzenadj \
+            --stapm-limit=22000 \
+            --fast-limit=22000 \
+            --slow-limit=22000 \
+            --tctl-temp=82 \
+            >/dev/null 2>&1; then
+            log_success "RyzenAdj power limits applied (22W, tctl-temp=82°C)."
+            log_info "RyzenAdj settings are also persisted via llm-sys-tune.service (reapplied on every boot)."
+            add_changed "RyzenAdj limits (22W, 82°C throttle, persistent via systemd)"
         else
             log_warn "RyzenAdj failed to apply limits (this is normal on some hardware/kernels)."
             add_skipped "RyzenAdj (failed to apply)"
