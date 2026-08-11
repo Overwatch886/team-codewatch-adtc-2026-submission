@@ -42,6 +42,7 @@ code-persona-adtc-2026-submission/
 ├── acolbert.py                  ← Local ColBERT Late-Interaction RAG & On-The-Fly Indexer
 ├── build_colbert_index.py       ← Local document indexing script
 ├── scripts/
+    |- orchestrator.py -- Contains extended orchestrator logic
 │   ├── orchestrator_server.py   ← Local FastAPI Orchestrator, TTS & Teacher Prompt Manager
 │   └── setup_system_permanently.sh ← System performance & memory tuning script
 └── static/
