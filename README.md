@@ -35,8 +35,8 @@ code-persona-adtc-2026-submission/
 ├── metadata.json                ← Required competition metadata & test prompts
 ├── download_model.sh            ← Benchmark model downloader script
 ├── download_models.sh           ← Supporting models downloader (Granite, Qwen, ColBERT, Audio)
-├── install_linux.sh             ← Automated installer script for native Linux
-├── install_wsl.sh               ← Automated installer script for Windows WSL2
+├── install_linux.sh             ← Automated installer for native Linux and Windows WSL2
+├── install_wsl.sh               ← Compatibility shim that forwards to install_linux.sh
 ├── run_4gb_bounded_server.sh    ← Main memory-bounded server launcher script
 ├── requirements.txt             ← Python dependencies
 ├── acolbert.py                  ← Local ColBERT Late-Interaction RAG & On-The-Fly Indexer
@@ -69,15 +69,14 @@ sudo ./scripts/setup_system_permanently.sh
 ```
 
 ### 3. Automated Installation
-For native Linux (Ubuntu, Debian, Fedora, Arch):
+One script handles every platform — native Linux (Ubuntu, Debian, Fedora, Arch) and
+Windows WSL2 (Ubuntu 22.04). It detects WSL automatically and adjusts GPU detection
+and post-install guidance accordingly:
 ```bash
 ./install_linux.sh
 ```
 
-For Windows users running WSL2(WSl2 has to have been setup with Ubuntu 22.04):
-```bash
-./install_wsl.sh
-```
+WSL2 users can also run `./install_wsl.sh`, which simply forwards to the script above.
 
 ### 4. Launch Service Under 4 GB RAM Cap
 Start the orchestrator server:

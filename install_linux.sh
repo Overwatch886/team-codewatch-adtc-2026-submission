@@ -29,8 +29,19 @@ print_error() {
     echo -e "${RED}✗ $1${NC}"
 }
 
+# This installer covers both native Linux and WSL2. Detect WSL once, up front: the
+# flag selects the GPU detection path in step 2 and adds Windows-only guidance in
+# step 11. Everything else is identical on both platforms.
+IS_WSL=0
+if grep -qiE "(microsoft|wsl)" /proc/version 2>/dev/null; then
+    IS_WSL=1
+fi
+
 # [1/11] Detect distro and install Ubuntu 22.04 system deps
 print_step 1 "Detecting OS and installing dependencies..."
+if [ "$IS_WSL" = "1" ]; then
+    echo "WSL2 environment detected (Windows Subsystem for Linux)."
+fi
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     case ${ID:-} in
@@ -134,7 +145,23 @@ fi
 GPU_TYPE="CPU"
 CMAKE_FLAGS="$(resolve_llama_flag NATIVE)"
 
-if command -v nvidia-smi &> /dev/null || lspci 2>/dev/null | grep -i nvidia &> /dev/null; then
+if [ "$IS_WSL" = "1" ]; then
+    # WSL2 has no PCI bus, so lspci returns nothing and the vendor cascade below
+    # cannot identify the card. The GPU is exposed through /dev/dxg instead, and only
+    # two backends actually pass through: CUDA (via the Windows NVIDIA driver) and
+    # Vulkan (via Mesa's Dozen/d3d12 driver). ROCm, SYCL and Level Zero do not.
+    if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
+        GPU_TYPE="NVIDIA"
+        CMAKE_FLAGS="$(resolve_llama_flag CUDA)"
+        print_success "WSL2 with NVIDIA passthrough detected. Setting CUDA flags (${CMAKE_FLAGS})."
+    elif [ -c /dev/dxg ] && has_vulkan_dev_support; then
+        GPU_TYPE="WSL_VULKAN"
+        CMAKE_FLAGS="$(resolve_llama_flag VULKAN)"
+        print_success "WSL2 GPU passthrough (/dev/dxg) detected. Setting Vulkan flags (${CMAKE_FLAGS})."
+    else
+        print_warning "No usable WSL2 GPU passthrough found. Defaulting to CPU (${CMAKE_FLAGS})."
+    fi
+elif command -v nvidia-smi &> /dev/null || lspci 2>/dev/null | grep -i nvidia &> /dev/null; then
     GPU_TYPE="NVIDIA"
     CMAKE_FLAGS="$(resolve_llama_flag CUDA)"
     print_success "NVIDIA GPU detected. Setting CUDA flags (${CMAKE_FLAGS})."
@@ -211,13 +238,19 @@ fi
 print_step 5 "Installing Python requirements..."
 source "$WORKSPACE_DIR/venv/bin/activate"
 pip install --upgrade pip
+pip install -r "$WORKSPACE_DIR/requirements.txt"
 
+# Install the hardware-appropriate ONNX Runtime *after* requirements.txt, so it wins
+# over the plain CPU build that kokoro-onnx pulls in as a transitive dependency.
+# Anything not NVIDIA/AMD/INTEL - including WSL_VULKAN - gets the CPU wheel, since
+# there is no Vulkan build of ONNX Runtime.
 case "$GPU_TYPE" in
     NVIDIA) pip install onnxruntime-gpu || pip install onnxruntime ;;
     AMD)    pip install onnxruntime-rocm -f https://repo.radeon.com/rocm/manylinux/rocm-rel-6.2/ || pip install onnxruntime ;;
     INTEL)  pip install onnxruntime-openvino || pip install onnxruntime ;;
     *)      pip install onnxruntime ;;
 esac
+print_success "Python requirements installed."
 
 # Helper for model auditing
 audit_model_file() {
@@ -316,3 +349,23 @@ echo -e "${GREEN}===============================================================
 echo -e "${CYAN}To launch the application, run:${NC}"
 echo -e "${CYAN}  cd $WORKSPACE_DIR && ./start.sh${NC}"
 echo -e "${GREEN}=================================================================${NC}"
+
+# WSL2-only follow-up guidance.
+if [ "$IS_WSL" = "1" ]; then
+    echo -e "${CYAN}Then open http://localhost:8085 in your Windows browser.${NC}"
+    echo -e "${GREEN}=================================================================${NC}"
+    # run_4gb_bounded_server.sh enforces the 4 GB ceiling with 'systemd-run
+    # -p MemoryMax=4G'. Without systemd it silently falls back to environment
+    # bounds only, so the hard cap is not applied.
+    if [ ! -d /run/systemd/private ]; then
+        print_warning "systemd is not enabled in this WSL2 distro, so the hard 4 GB memory cap CANNOT be enforced."
+        echo -e "${YELLOW}  To enable it, add the following to /etc/wsl.conf:${NC}"
+        echo -e "${YELLOW}      [boot]${NC}"
+        echo -e "${YELLOW}      systemd=true${NC}"
+        echo -e "${YELLOW}  then run 'wsl --shutdown' in PowerShell and reopen this terminal.${NC}"
+    else
+        print_success "systemd is enabled - the 4 GB memory cap will be enforced."
+    fi
+    print_warning "Windows Defender may prompt for network access on first launch. Click 'Allow'."
+    echo -e "${GREEN}=================================================================${NC}"
+fi
