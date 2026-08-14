@@ -86,6 +86,8 @@ if $IS_WSL2; then
 else
     DESIRED_SWAP_GB=12
     DESIRED_SWAP_BYTES=$((DESIRED_SWAP_GB * 1024 * 1024 * 1024))
+    # Threshold (11 GiB) accounts for decimal GB (12 GB = 11.17 GiB), free-h rounding, and kernel swap header overhead
+    MIN_SWAP_BYTES=$((11 * 1024 * 1024 * 1024))
 
     # --- Check total active swap across ALL sources (partitions + files) ---
     # 'free' reports in kibibytes; multiply by 1024 to get bytes.
@@ -99,54 +101,63 @@ else
         awk 'NR>1 {printf "  %-40s type=%-10s size=%s kB\n", $1, $2, $3}' /proc/swaps
     fi
 
-    if [[ $current_swap_bytes -ge $DESIRED_SWAP_BYTES ]]; then
-        log_info "Total swap is already >= ${DESIRED_SWAP_GB}GB. No changes needed."
+    if [[ $current_swap_bytes -ge $MIN_SWAP_BYTES ]]; then
+        log_info "Total swap is already >= ~${DESIRED_SWAP_GB}GB (detected $current_swap_human). No changes needed."
         add_skipped "Swap Memory (already >= ${DESIRED_SWAP_GB}GB across all sources)"
     else
-        log_info "Total swap is below ${DESIRED_SWAP_GB}GB. Checking /swapfile..."
+        log_info "Total swap is below ${DESIRED_SWAP_GB}GB ($current_swap_human active). Checking existing swap files..."
         needs_swap=true
 
+        # Find any existing swapfile (/swapfile or /swap.img)
+        existing_swap=""
         if [[ -f /swapfile ]]; then
-            swapfile_size=$(stat -c "%s" /swapfile 2>/dev/null || echo 0)
-            if [[ $swapfile_size -ge $DESIRED_SWAP_BYTES ]]; then
+            existing_swap="/swapfile"
+        elif [[ -f /swap.img ]]; then
+            existing_swap="/swap.img"
+        fi
+
+        if [[ -n "$existing_swap" ]]; then
+            swapfile_size=$(stat -c "%s" "$existing_swap" 2>/dev/null || echo 0)
+            if [[ $swapfile_size -ge $MIN_SWAP_BYTES ]]; then
                 # File exists and is large enough but may not be active
-                log_info "/swapfile is >= ${DESIRED_SWAP_GB}GB but may not be active. Activating..."
-                if ! grep -q "/swapfile" /proc/swaps; then
-                    swapon /swapfile
-                    log_success "/swapfile activated."
-                    add_changed "Swap Memory (/swapfile re-activated)"
+                log_info "$existing_swap is >= ~${DESIRED_SWAP_GB}GB but may not be active. Activating..."
+                if ! grep -q "$existing_swap" /proc/swaps; then
+                    swapon "$existing_swap"
+                    log_success "$existing_swap activated."
+                    add_changed "Swap Memory ($existing_swap re-activated)"
                 else
-                    log_info "/swapfile is already active."
-                    add_skipped "Swap Memory (/swapfile already active)"
+                    log_info "$existing_swap is already active."
+                    add_skipped "Swap Memory ($existing_swap already active)"
                 fi
                 needs_swap=false
             else
-                log_info "Existing /swapfile is smaller than ${DESIRED_SWAP_GB}GB ($(( swapfile_size / 1024 / 1024 / 1024 ))GB). Removing it to recreate..."
-                if grep -q "/swapfile" /proc/swaps; then
-                    swapoff /swapfile || true
+                log_info "Existing $existing_swap is smaller than ~${DESIRED_SWAP_GB}GB ($(( swapfile_size / 1024 / 1024 / 1024 ))GB). Removing it to recreate..."
+                if grep -q "$existing_swap" /proc/swaps; then
+                    swapoff "$existing_swap" || true
                 fi
-                rm -f /swapfile
+                rm -f "$existing_swap"
             fi
         fi
 
         if $needs_swap; then
-            log_info "Creating ${DESIRED_SWAP_GB}GB /swapfile..."
-            if ! fallocate -l "${DESIRED_SWAP_GB}G" /swapfile 2>/dev/null; then
+            target_swap="/swapfile"
+            log_info "Creating ${DESIRED_SWAP_GB}GB $target_swap..."
+            if ! fallocate -l "${DESIRED_SWAP_GB}G" "$target_swap" 2>/dev/null; then
                 log_warn "fallocate failed, falling back to dd (this will take a while)..."
-                dd if=/dev/zero of=/swapfile bs=1G count="$DESIRED_SWAP_GB" status=progress
+                dd if=/dev/zero of="$target_swap" bs=1M count=$(( DESIRED_SWAP_GB * 1024 )) status=progress
             fi
-            chmod 600 /swapfile
-            mkswap /swapfile
-            swapon /swapfile
-            log_success "${DESIRED_SWAP_GB}GB /swapfile created and activated."
-            add_changed "Swap Memory (${DESIRED_SWAP_GB}GB swapfile created)"
-        fi
+            chmod 600 "$target_swap"
+            mkswap "$target_swap"
+            swapon "$target_swap"
+            log_success "${DESIRED_SWAP_GB}GB $target_swap created and activated."
+            add_changed "Swap Memory (${DESIRED_SWAP_GB}GB $target_swap created)"
 
-        if ! grep -q "/swapfile.*swap" /etc/fstab; then
-            echo "/swapfile none swap sw 0 0" >> /etc/fstab
-            log_success "Added /swapfile to /etc/fstab for persistence."
-        else
-            log_info "/swapfile is already in /etc/fstab."
+            if ! grep -E -q "(/swapfile|/swap.img).*swap" /etc/fstab; then
+                echo "$target_swap none swap sw 0 0" >> /etc/fstab
+                log_success "Added $target_swap to /etc/fstab for persistence."
+            else
+                log_info "Swap entry already in /etc/fstab."
+            fi
         fi
     fi
 

@@ -33,8 +33,9 @@ fi
 #   ──────────────────────────────────────────
 #   Typical peak:                      ~4.50 GB  ✓ (Well within 6 GB cap)
 
-export LLAMA_CTX_SIZE="4096"
-export LLAMA_CTX_SIZE_GRANITE="4096"
+export PYTHONUNBUFFERED="1"
+export LLAMA_CTX_SIZE="131072"
+export LLAMA_CTX_SIZE_GRANITE="131072"
 export LLAMA_BATCH_SIZE="2048"
 export LLAMA_UBATCH_SIZE="512"
 export LLAMA_THREADS="4"
@@ -51,7 +52,7 @@ export COLBERT_CHUNK_OVERLAP="200"
 echo "========================================================"
 echo "🛡️  Launching Local Orchestrator under HARD 6 GB RAM Cap"
 echo "========================================================"
-echo "  LLAMA_CTX_SIZE   = 4096 (Granite 4.0 H Tiny)"
+echo "  LLAMA_CTX_SIZE   = 131072 (Granite 4.0 H Tiny)"
 echo "  LLAMA_CACHE_RAM  = ${LLAMA_CACHE_RAM} MB"
 echo "  COLBERT_THREADS  = ${COLBERT_THREADS}"
 echo "========================================================"
