@@ -42,3 +42,6 @@ software/llama.cpp
 
 # Other folders
 scratch/
+
+# Test Scripts
+test_scripts/
