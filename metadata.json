@@ -24,14 +24,14 @@
       "prompt": "I don't understand the OOP concepts of inheritance and polymorphism, can you break it down for me?"
     }
   ],
-  "model": {
-    "name": "granite-4.1-3b-Q4_K_M.gguf",
+    "model": {
+      "name": "granite-4.0-h-tiny",
     "runtime": "llama.cpp",
-    "quantization": "GGUF Q4_K_M",
-    "parameters_estimate": "3.4B",
+    "quantization": "GGUF IQ4_XS",
+    "parameters_estimate": "6.94B",
     "packaging": "binary_bundle"
   },
   "_runtime": {
-    "model_path": "model/granite-4.1-3b-Q4_K_M.gguf"
+    "model_path": "model/granite-4.0-h-tiny.i1-IQ4_XS.gguf"
   }
 }
