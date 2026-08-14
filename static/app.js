@@ -177,13 +177,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     const b = data.breakdown;
                     if (breakdownOs) breakdownOs.textContent = `${Number(b.os_baseline_mb || 0).toFixed(1)} MB`;
                     if (breakdownGpu) {
-                        const gpuMb = Number(b.granite_gpu_mb || 0);
                         const weightsMb = Number(b.model_weights_mb || 0);
-                        const activeMb = gpuMb > 0 ? gpuMb : weightsMb;
                         const diskGb = Number(b.model_disk_gb || 0).toFixed(2);
-                        breakdownGpu.textContent = activeMb >= 1024
-                            ? `${(activeMb / 1024).toFixed(2)} GB (${diskGb} GB on disk)`
-                            : `${activeMb.toFixed(1)} MB (${diskGb} GB on disk)`;
+                        const displayMb = weightsMb > 0 ? weightsMb : Number(b.granite_gpu_mb || 0);
+                        if (displayMb >= 1024) {
+                            breakdownGpu.textContent = `${(displayMb / 1024).toFixed(2)} GB (${diskGb} GB on disk)`;
+                        } else {
+                            breakdownGpu.textContent = `${displayMb.toFixed(1)} MB (${diskGb} GB on disk)`;
+                        }
                     }
                     if (breakdownModelName) breakdownModelName.textContent = b.model_name || "Active Model";
                     
