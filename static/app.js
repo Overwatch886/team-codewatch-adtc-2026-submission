@@ -50,15 +50,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (data.status === "ok") {
                 if (activeDisplay) {
-                    if (targetModel === "fast_ship" || targetModel === "qwen") {
-                        activeDisplay.textContent = "Qwen 2.5 Coder 3B (Build & Ship Fast Mode)";
+                    if (targetModel === "fast_ship" || targetModel === "qwen" || targetModel === "fast") {
+                        activeDisplay.textContent = "Granite 4.0 H-Tiny (Build & Ship Fast Mode)";
                         if (activeIcon) activeIcon.className = "fa-solid fa-rocket";
-                    } else if (targetModel === "socratic_study" || targetModel === "granite" || targetModel === "lfm") {
-                        activeDisplay.textContent = "Granite 4.1 3B (Step-by-Step Socratic Study Mode)";
-                        if (activeIcon) activeIcon.className = "fa-solid fa-graduation-cap";
                     } else {
-                        activeDisplay.textContent = "Auto-Routing Mode (ColBERT Intent Analyzer)";
-                        if (activeIcon) activeIcon.className = "fa-solid fa-bolt";
+                        activeDisplay.textContent = "Granite 4.0 H-Tiny (Step-by-Step Socratic Study Mode)";
+                        if (activeIcon) activeIcon.className = "fa-solid fa-graduation-cap";
                     }
                 }
                 updateMetrics();
@@ -194,11 +191,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     const activeIcon = document.getElementById("active-model-icon");
                     if (activeDisplay && b.model_name && b.model_name !== "None") {
                         const mName = String(b.model_name).toLowerCase();
-                        if (mName.includes("qwen")) {
-                            activeDisplay.textContent = "Qwen 2.5 Coder 3B (Build & Ship Fast Mode)";
+                        if (mName.includes("qwen") || mName.includes("fast")) {
+                            activeDisplay.textContent = "Granite 4.0 H-Tiny (Build & Ship Fast Mode)";
                             if (activeIcon) activeIcon.className = "fa-solid fa-rocket";
-                        } else if (mName.includes("granite")) {
-                            activeDisplay.textContent = "Granite 4.1 3B (Step-by-Step Socratic Study Mode)";
+                        } else {
+                            activeDisplay.textContent = "Granite 4.0 H-Tiny (Step-by-Step Socratic Study Mode)";
                             if (activeIcon) activeIcon.className = "fa-solid fa-graduation-cap";
                         }
                     }
@@ -418,10 +415,10 @@ document.addEventListener("DOMContentLoaded", () => {
             let modelBadgeLabel = "Auto-Routing (ColBERT)";
             let modelIcon = "fa-bolt";
             if (isQwen) {
-                modelBadgeLabel = "Qwen 2.5 Coder 3B (Fast Ship)";
+                modelBadgeLabel = "Granite 4.0 H-Tiny (Direct Coder)";
                 modelIcon = "fa-rocket";
-            } else if (isGranite) {
-                modelBadgeLabel = "Granite 4.1 3B (Socratic Tutor)";
+            } else {
+                modelBadgeLabel = "Granite 4.0 H-Tiny (Socratic Tutor)";
                 modelIcon = "fa-graduation-cap";
             }
             headerDiv.innerHTML = `<span class="sender-name">Professor LowaCode</span> <span style="margin-left: 8px; font-size: 10px; font-weight: 500; color: #34d399; background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.2); padding: 1px 8px; border-radius: 10px;"><i class="fa-solid ${modelIcon}"></i> ${modelBadgeLabel}</span>`;
@@ -533,14 +530,11 @@ document.addEventListener("DOMContentLoaded", () => {
             const activeIcon = document.getElementById("active-model-icon");
             if (activeDisplay) {
                 if (isQwen) {
-                    activeDisplay.textContent = "Qwen 2.5 Coder 3B (Build & Ship Fast Mode)";
+                    activeDisplay.textContent = "Granite 4.0 H-Tiny (Build & Ship Fast Mode)";
                     if (activeIcon) activeIcon.className = "fa-solid fa-rocket";
-                } else if (isGranite) {
-                    activeDisplay.textContent = "Granite 4.1 3B (Step-by-Step Socratic Study Mode)";
-                    if (activeIcon) activeIcon.className = "fa-solid fa-graduation-cap";
                 } else {
-                    activeDisplay.textContent = "Auto-Routing Mode (ColBERT Intent Analyzer)";
-                    if (activeIcon) activeIcon.className = "fa-solid fa-bolt";
+                    activeDisplay.textContent = "Granite 4.0 H-Tiny (Step-by-Step Socratic Study Mode)";
+                    if (activeIcon) activeIcon.className = "fa-solid fa-graduation-cap";
                 }
             }
 
@@ -551,10 +545,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     let modelBadgeLabel = "Auto-Routing (ColBERT)";
                     let modelIcon = "fa-bolt";
                     if (isQwen) {
-                        modelBadgeLabel = "Qwen 2.5 Coder 3B (Fast Ship)";
+                        modelBadgeLabel = "Granite 4.0 H-Tiny (Direct Coder)";
                         modelIcon = "fa-rocket";
-                    } else if (isGranite) {
-                        modelBadgeLabel = "Granite 4.1 3B (Socratic Tutor)";
+                    } else {
+                        modelBadgeLabel = "Granite 4.0 H-Tiny (Socratic Tutor)";
                         modelIcon = "fa-graduation-cap";
                     }
                     msgHeader.innerHTML = `<span class="sender-name">Professor LowaCode</span> <span style="margin-left: 8px; font-size: 10px; font-weight: 500; color: #34d399; background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.2); padding: 1px 8px; border-radius: 10px;"><i class="fa-solid ${modelIcon}"></i> ${modelBadgeLabel}</span>`;
