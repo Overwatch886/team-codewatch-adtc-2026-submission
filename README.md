@@ -78,7 +78,7 @@ Start the orchestrator server using the canonical launcher:
 ```bash
 ./start.sh
 ```
-```
+
 *(Or launch directly under 6 GB RAM cgroup enforcement with `./run_6gb_bounded_server.sh`).*
 
 ### 5. Open Web Dashboard
