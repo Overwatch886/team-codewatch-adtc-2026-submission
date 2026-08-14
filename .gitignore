@@ -3,7 +3,6 @@
 *.bin
 *.safetensors
 model/
-answerai-colbert-small-v1/
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
