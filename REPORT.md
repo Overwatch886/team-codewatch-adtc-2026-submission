@@ -1,21 +1,16 @@
-# Technical Report — Code Persona: An Offline Voice-Driven Pair Programmer
+# Technical Report — Code Persona: An Offline Socratic Coding Tutor
 
 **Team ID:** code-persona  
 **Domain:** coding_assistants  
-**Primary Model:** granite-4.1-3b-Q4_K_M.gguf (Socratic Tutor / Auto Mode)  
-**Secondary Model:** qwen2.5-coder-3b-instruct-q4_k_m.gguf (Ship Fast / Coding Mode)
+**Primary Model:** granite-4.0-h-tiny.i1-IQ4_XS.gguf (Single Resident LLM for Socratic Tutor & Ship Fast Modes)  
 
 ---
 
 ## Problem
 
-For the average African programmer or technical student, the workflow always involves copying code problems from their device or screenshotting it and sending it all the way to cloud LLMs. This workflow is quite rigid and slows down the engineer's work process as well as restricts the capabilities of the models. Cloud models are also quite expensive to use for the average African, plus with issues such as poor network connectivity, the code project to be finished today might just be stopped in its tracks by bad weather or an exhausted API limit.
+For every computer science student, the crowded lecture hall and limited practical equipments always leave the student unfulfilled after every lecture. There is always a need to understand more and practicalize what they have learnt. LLMS are usually the next options in the mind of students, until they visit the LLM site and oops, poor internet connection becomes the next hindrance. Professor Lowacode is here to solve that by bring the tutoring capabilities of cloud LLMs on device for them serving as  home tutors on device for coding tasks and concepts.
 
-Code Persona aims to solve this problem by bringing a personal pair programmer to the laptops of the average African student and technician. Code Persona runs on budget hardware of 8 GB RAM with integrated graphics only, with **zero internet dependency**. It functions as both a coding tutor and a coding assistant simultaneously — it builds code alongside the student while explaining the logic behind every decision, so they learn while they ship.
-
-Beyond the screen, Code Persona solves a second, often overlooked problem: **physical interaction constraints**. Many African students learn on second-hand or partially broken laptops where keyboards are unreliable, sticky, or missing keys. Code Persona is driven entirely by voice — students speak their logic and the assistant types, explains, and runs the code for them. This also benefits developers whose hands are occupied (working at a workbench, a lab, or a field environment) who cannot easily type but still need to interface with code.
-
-Code Persona is a multi-agent system that dynamically orchestrates specialized local models for speech transcription, intent routing, document retrieval, code reasoning, and spoken response generation — all within a strict **4 GB systemd cgroup ceiling**, running fully offline on CPU-only hardware.
+Code Persona is an offline system that orchestrates specialized local models for speech transcription, intent routing, document retrieval, code reasoning, and spoken response generation — powered by a single resident **Granite 4.0 H Tiny Q4_K_S** model (`-ngl 25` GPU offload) running within a strict **4 GB systemd cgroup ceiling**, operating fully offline.
 
 ---
 
@@ -29,9 +24,7 @@ We first explored one-bit ternary modules, majorly Prism LM Ternary Bonsai model
 
 We also explored the LFM models powered by Liquid AI. These models are purpose-made for edge hardware with blazing fast inference speeds of 10 tokens/sec and above. However, Liquid AI specifically do not recommend LFM modules for code-related tasks due to their architecture. So the LFM models, despite their speed, could not serve as Code Persona's reasoning brain.
 
-We also explored Granite 4.0 H micro, Granite 4.0 H tiny, Granite 4.1 3B, and Granite 4.1 8B, as well as Gemma E2B, Gemma E4B, Nemotron Nano 4B, Qwen 3.5 4B, and Qwen 2.5 1.5B/3B. Through this evaluation we arrived at a **dual-engine architecture** rather than a single model. The standout primary model was **Granite 4.1 3B** — a dense, instruction-tuned model with IBM-validated code generation quality that delivers strong Socratic reasoning, structured step-by-step explanations, and constrained diagnostic responses within a 4,096 token context window. It is used for Socratic Tutor Mode, Debugging Diagnostic Mode, Auto Mode, and Code Review Mode.
-
-For direct code generation we selected **Qwen 2.5 Coder 3B** as the secondary engine — purpose-built for code tasks with strong fill-in-middle (FIM) capability. It powers the Ship Fast mode with an expanded **10,240 token context window**, enabled by 8-bit quantized KV cache (`-ctk q8_0 -ctv q8_0`) which keeps the 10k context overhead under ~160 MB. The two engines share a single `llama-server` process that hot-swaps between them on demand — only one model resides in RAM at any time.
+Through extensive benchmarking across Granite 4.0 H micro, Granite 4.0 H tiny, Granite 4.1 3B, Qwen 2.5 Coder, and Gemma models, we arrived at a **single-model architecture** powered by **Granite 4.0 H Tiny Q4_K_S** (`granite-4.0-h-tiny.i1-IQ4_XS.gguf`). Granite 4.0 H Tiny delivers exceptional code understanding and reasoning while fitting comfortably within memory constraints when configured with `-ngl 25` layer offloading. Both Socratic Tutor Mode and Build & Ship Fast Mode are served seamlessly by this single resident model via dynamic system-prompt persona switching, eliminating background model-swapping overhead.
 
 Other architectures explored include Test Time Training (TTT), Google Griffin, subquadratic state spaces, and Liquid Neural Networks — but most were not yet deployable through `llama.cpp` at the time of building.
 
@@ -75,7 +68,7 @@ A custom ONNX-quantized ColBERT retrieval model (AnswerAI `answerai-colbert-smal
 
 The target hardware as specified by the competition is 8 GB RAM, integrated GPU, and Ubuntu 22.04. This matches the typical profile of a budget student or developer laptop in an African context. Code Persona targets pure CPU inference via `llama.cpp` with C/C++ optimized backends.
 
-The dual-engine design with a **hard 4 GB systemd cgroup ceiling** (`MemoryMax=4G`) ensures the system operates with significant headroom below the 8 GB physical limit — leaving the remaining ~4 GB free for the OS, desktop environment, browser, and other student applications running alongside it.
+The design with a **hard 4 GB systemd cgroup ceiling** (`MemoryMax=4G`) ensures the system operates with significant headroom below the 8 GB physical limit — leaving the remaining ~4 GB free for the OS, desktop environment, browser, and other student applications running alongside it.
 
 Additional real-world constraints that shaped the design:
 - **No stable internet** — all models run fully offline; zero external API calls during inference
@@ -93,7 +86,7 @@ We report two sets of numbers:
 
 ### 1. Current Architecture (Host Machine — `--mmap --mlock`, Hard 4 GB Cgroup)
 
-Benchmarking the updated dual-engine system on the host machine — an **HP EliteBook 845 G7** powered by an **AMD Ryzen 5 PRO 4650U** — under the hard 4 GB systemd cgroup ceiling (`MemoryMax=4G`, `MemoryHigh=3.7G`) with `--mmap --mlock` and 8-bit quantized KV cache:
+Benchmarking the updated system my personal machine — an **HP EliteBook 845 G7** powered by an **AMD Ryzen 5 PRO 4650U** — under the hard 4 GB systemd cgroup ceiling (`MemoryMax=4G`, `MemoryHigh=3.7G`) with `--mmap --mlock` and 8-bit quantized KV cache:
 
 | Component | Resident Memory | Notes |
 | :--- | :--- | :--- |
