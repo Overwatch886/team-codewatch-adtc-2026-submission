@@ -1,6 +1,11 @@
 from pathlib import Path
-import os
 import sys
+import os
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+except Exception:
+    pass
 import time
 import json
 import logging
@@ -43,6 +48,7 @@ TTS_SETTINGS_FILE = os.path.join(WORKSPACE_DIR, "scratch", "tts_settings.json")
 tts_enabled = False
 kokoro_instance = None
 kokoro_lock = threading.Lock()
+model_load_lock = threading.Lock()
 
 def load_tts_settings():
     global tts_enabled
@@ -521,12 +527,12 @@ def get_metrics():
         # VmRSS includes mmap'd file pages (the full GGUF file mapped with --mmap)
         # which inflates the model memory reading to nearly the full file size.
         # RssAnon = actual physical RAM used by the process excluding file mappings.
-        def read_rss_anon(pid: int) -> float:
-            """Return RssAnon in MB for a PID. Falls back to 0 on error."""
+        def read_rss_total(pid: int) -> float:
+            """Return VmRSS (total physical RAM in MB) for a PID, including mmap'd model pages."""
             try:
                 with open(f"/proc/{pid}/status", "r") as f:
                     for line in f:
-                        if line.startswith("RssAnon:"):
+                        if line.startswith("VmRSS:"):
                             return int(line.split()[1]) / 1024.0
             except Exception:
                 pass
@@ -541,16 +547,16 @@ def get_metrics():
                         cmdline = f.read().replace(b'\x00', b' ').decode('utf-8', errors='ignore')
 
                 if pid == my_pid:
-                    orchestrator_rss_mb += read_rss_anon(pid)
+                    orchestrator_rss_mb += read_rss_total(pid)
+                elif "mmproj" in cmdline.lower() or "lfm" in cmdline.lower() or "vision" in cmdline.lower():
+                    vision_rss_mb += read_rss_total(pid)
                 elif ("llama-server" in cmdline or "llama-cli" in cmdline) and (
-                    "8081" in cmdline or "port 8081" in cmdline or "granite" in cmdline.lower() or "qwen" in cmdline.lower()
+                    "8081" in cmdline or "port 8081" in cmdline or "granite" in cmdline.lower()
                 ):
-                    granite_rss_mb += read_rss_anon(pid)
+                    granite_rss_mb += read_rss_total(pid)
                     granite_pid = pid
-                elif "LFM2.5-VL" in cmdline or "vision" in cmdline.lower():
-                    vision_rss_mb += read_rss_anon(pid)
                 elif "acolbert" in cmdline:
-                    colbert_rss_mb += read_rss_anon(pid)
+                    colbert_rss_mb += read_rss_total(pid)
             except Exception:
                 pass
 
@@ -565,7 +571,7 @@ def get_metrics():
                             with open(f"/proc/{pid}/cmdline", "rb") as f:
                                 cmdline = f.read().replace(b'\x00', b' ').decode('utf-8', errors='ignore')
                         if ("llama-server" in cmdline or "llama-cli" in cmdline) and ("8081" in cmdline or "port 8081" in cmdline):
-                            granite_rss_mb = read_rss_anon(pid)
+                            granite_rss_mb = read_rss_total(pid)
                             granite_pid = pid
                             break
                     except Exception:
@@ -602,18 +608,18 @@ def get_metrics():
         prompt_cache_mb = n_prompt_tokens_cache * 0.03125
 
         # Determine model name and exact file size on disk
-        if CURRENT_LOADED_MODEL_KEY == "qwen":
-            default_model_name = "Qwen 2.5 Coder 3B"
-            model_path = str(Path(__file__).resolve().parent.parent / "model" / "qwen" / "qwen2.5-coder-3b-instruct-q4_k_m.gguf")
-        else:
-            default_model_name = "Granite 4.1 3B"
-            model_path = str(Path(__file__).resolve().parent.parent / "model" / "granite" / "granite-4.1-3b-Q4_K_M.gguf")
-
+        default_model_name = "Granite 4.0 H-Tiny"
+        m_dir = Path(__file__).resolve().parent.parent / "model"
+        possible_paths = [
+            m_dir / "granite-4.0-h-tiny.i1-IQ4_XS.gguf",
+            m_dir / "granite" / "granite-4.0-h-tiny.i1-IQ4_XS.gguf",
+        ]
+        model_path = str(next((p for p in possible_paths if p.exists()), possible_paths[0]))
 
         model_name = default_model_name
-        disk_size_gb = 2.0
+        disk_size_gb = 3.49
         if os.path.exists(model_path):
-            disk_size_gb = round(os.path.getsize(model_path) / (1024 * 1024 * 1024), 2)
+            disk_size_gb = round(os.path.getsize(model_path) / (1024.0 * 1024.0 * 1024.0), 2)
 
         try:
             props_res = requests.get("http://127.0.0.1:8081/props", timeout=0.3)
@@ -622,27 +628,25 @@ def get_metrics():
                 live_path = props_data.get("model_path", "")
                 if live_path and os.path.exists(live_path):
                     base_name = os.path.basename(live_path)
-                    if "qwen" in base_name.lower():
-                        model_name = "Qwen 2.5 Coder 3B"
-                    elif "granite" in base_name.lower():
-                        model_name = "Granite 4.1 3B"
+                    if "granite" in base_name.lower():
+                        model_name = "Granite 4.0 H-Tiny"
                     else:
                         clean_name = base_name.replace(".gguf", "")
                         clean_name = re.sub(r'[-_]Q[0-9]_[A-Za-z0-9_]+', '', clean_name)
                         model_name = clean_name.replace("-", " ").replace("_", " ").title()
-                    disk_size_gb = round(os.path.getsize(live_path) / (1024 * 1024 * 1024), 2)
+                    disk_size_gb = round(os.path.getsize(live_path) / (1024.0 * 1024.0 * 1024.0), 2)
         except Exception:
             pass
 
-            
         granite_gpu_mb = read_gpu_resident_mb(granite_pid)
 
-        # llama.cpp overhead and prompt cache sub-components of granite_rss_mb
-        llama_cpp_overhead_mb = 0.0
-        granite_weights_mb = 0.0
+        # In mmap mode, granite_rss_mb is the true physical RAM used by llama-server (mmap'd weights + KV cache)
         if granite_rss_mb > 0.0:
-            llama_cpp_overhead_mb = min(80.0, granite_rss_mb * 0.08)
-            granite_weights_mb = max(0.0, granite_rss_mb - prompt_cache_mb - llama_cpp_overhead_mb)
+            llama_cpp_overhead_mb = min(60.0, max(20.0, granite_rss_mb * 0.02))
+            granite_weights_mb = max(0.0, granite_rss_mb - llama_cpp_overhead_mb - prompt_cache_mb)
+        else:
+            granite_weights_mb = 0.0
+            llama_cpp_overhead_mb = 0.0
 
         # Determine total / used / available RAM
         # When cgroup is active: total_used = cgroup_used_mb (authoritative).
@@ -653,10 +657,11 @@ def get_metrics():
             available_gb  = round(max(0.0, total_gb - used_gb), 2)
             total_used_mb = cgroup_used_mb
 
-            known_mb = granite_rss_mb + colbert_rss_mb + kokoro_rss_mb + orchestrator_rss_mb + vision_rss_mb
+            known_mb = (granite_weights_mb + llama_cpp_overhead_mb + prompt_cache_mb +
+                        colbert_rss_mb + kokoro_rss_mb + orchestrator_rss_mb + vision_rss_mb)
             os_baseline_mb = max(0.0, cgroup_used_mb - known_mb)
         else:
-            total_used_mb = (granite_rss_mb + granite_gpu_mb + kokoro_rss_mb + colbert_rss_mb + orchestrator_rss_mb + vision_rss_mb)
+            total_used_mb = (granite_weights_mb + llama_cpp_overhead_mb + prompt_cache_mb + granite_gpu_mb + kokoro_rss_mb + colbert_rss_mb + orchestrator_rss_mb + vision_rss_mb)
             used_gb      = round(total_used_mb / 1024.0, 2)
             total_gb     = round(psutil.virtual_memory().total / 1024.0 / 1024.0 / 1024.0, 2)
             available_gb = round(max(0.0, total_gb - used_gb), 2)
@@ -721,46 +726,38 @@ async def switch_model_endpoint(request: Request):
     global FORCED_MODEL_OVERRIDE, CURRENT_SESSION_MODE
     try:
         body = await request.json()
-        target = body.get("model", "auto").lower()
+        target = body.get("model", "socratic_study").lower()
 
-        if target in ("socratic_study", "granite", "lfm"):
-            FORCED_MODEL_OVERRIDE = "granite"
+        if target in ("fast_ship", "fast"):
+            FORCED_MODEL_OVERRIDE = "fast_ship"
+            CURRENT_SESSION_MODE = "fast_ship"
+            ensure_model_loaded("granite")
+            return {"status": "ok", "active_model": "Granite 4.0 H-Tiny (Build & Ship Fast Mode)", "override": "fast_ship"}
+        else:
+            FORCED_MODEL_OVERRIDE = "socratic_study"
             CURRENT_SESSION_MODE = "socratic_study"
             ensure_model_loaded("granite")
-            return {"status": "ok", "active_model": "Granite 4.1 3B (Step-by-Step Socratic Study Mode)", "override": "socratic_study"}
-        elif target in ("fast_ship", "qwen"):
-            FORCED_MODEL_OVERRIDE = "qwen"
-            CURRENT_SESSION_MODE = "fast_ship"
-            ensure_model_loaded("qwen")
-            return {"status": "ok", "active_model": "Qwen 2.5 Coder 3B (Build & Ship Fast Mode)", "override": "fast_ship"}
-        else:
-            FORCED_MODEL_OVERRIDE = None
-            CURRENT_SESSION_MODE = "auto"
-            return {"status": "ok", "active_model": "Auto (Smart Intent Routing via ColBERT)", "override": "auto"}
+            return {"status": "ok", "active_model": "Granite 4.0 H-Tiny (Step-by-Step Socratic Study Mode)", "override": "socratic_study"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-CURRENT_SESSION_MODE = "auto"
+CURRENT_SESSION_MODE = "socratic_study"
 
 @app.post("/set_session_mode")
 async def set_session_mode(request: Request):
     global CURRENT_SESSION_MODE, FORCED_MODEL_OVERRIDE
     body = await request.json()
-    mode = body.get("mode", "auto")
-    if mode == "socratic_study":
-        CURRENT_SESSION_MODE = "socratic_study"
-        FORCED_MODEL_OVERRIDE = "granite"
-        ensure_model_loaded("granite")
-        active_model = "Granite 4.1 3B (Step-by-Step Socratic Study Mode)"
-    elif mode == "fast_ship":
+    mode = body.get("mode", "socratic_study")
+    if mode == "fast_ship":
         CURRENT_SESSION_MODE = "fast_ship"
-        FORCED_MODEL_OVERRIDE = "qwen"
-        ensure_model_loaded("qwen")
-        active_model = "Qwen 2.5 Coder 3B (Build & Ship Fast Mode)"
+        FORCED_MODEL_OVERRIDE = "fast_ship"
+        ensure_model_loaded("granite")
+        active_model = "Granite 4.0 H-Tiny (Build & Ship Fast Mode)"
     else:
-        CURRENT_SESSION_MODE = "auto"
-        FORCED_MODEL_OVERRIDE = None
-        active_model = "Auto (Smart Intent Routing via ColBERT)"
+        CURRENT_SESSION_MODE = "socratic_study"
+        FORCED_MODEL_OVERRIDE = "socratic_study"
+        ensure_model_loaded("granite")
+        active_model = "Granite 4.0 H-Tiny (Step-by-Step Socratic Study Mode)"
     print(f"[Server] Session mode updated to: {CURRENT_SESSION_MODE} ({active_model})")
     return {"status": "ok", "session_mode": CURRENT_SESSION_MODE, "active_model": active_model}
 
@@ -769,39 +766,66 @@ async def favicon():
     return Response(status_code=204)
 
 
-def ensure_model_loaded(target_key: str, force_restart: bool = False):
+def is_port_8081_process_alive():
+    try:
+        res = subprocess.run(["fuser", "8081/tcp"], capture_output=True, text=True)
+        return bool(res.stdout.strip())
+    except Exception:
+        return False
+
+def ensure_model_loaded(target_key: str = "granite", force_restart: bool = False):
     global CURRENT_LOADED_MODEL_KEY
     import requests
 
-    if not force_restart and CURRENT_LOADED_MODEL_KEY == target_key:
-        try:
-            r = requests.get("http://127.0.0.1:8081/health", timeout=0.5)
-            if r.status_code == 200 and r.json().get("status") == "ok":
-                return
-        except Exception:
-            print(f"[Server Warning] Model recorded as {target_key}, but port 8081 is not responding. Forcing restart...")
+    with model_load_lock:
+        if not force_restart and CURRENT_LOADED_MODEL_KEY == "granite":
+            try:
+                r = requests.get("http://127.0.0.1:8081/health", timeout=5.0)
+                if r.status_code == 200 and r.json().get("status") == "ok":
+                    return
+            except Exception:
+                if is_port_8081_process_alive():
+                    print("[Server Info] Granite 4.0 H Tiny model recorded as loaded, port 8081 process is alive but busy. Skipping restart...")
+                    return
+                print("[Server Warning] Granite 4.0 H Tiny model recorded as loaded, but port 8081 is not responding. Forcing restart...")
 
-    print(f"[Server] 🔄 Swapping resident model to: {target_key} (llama-server)...")
-    subprocess.run(["fuser", "-k", "8081/tcp"], capture_output=True)
-    time.sleep(1)
+        print("[Server] 🔄 Launching resident Granite 4.0 H Tiny Q4_K_S model (llama-server, -ngl 25)...")
+        subprocess.run(["fuser", "-k", "8081/tcp"], capture_output=True)
+        time.sleep(1)
 
     LLAMA_SERVER_BIN = str(Path(__file__).resolve().parent.parent / "software" / "llama.cpp" / "build" / "bin" / "llama-server")
 
-    if target_key == "qwen":
-        model_path = str(Path(__file__).resolve().parent.parent / "model" / "qwen" / "qwen2.5-coder-3b-instruct-q4_k_m.gguf")
-        alias_name = "qwen2.5-coder-3b-instruct"
-        ngl_flag = "99"
-        llama_ctx = os.getenv("LLAMA_CTX_SIZE_QWEN", "10240")
+    m_dir = Path(__file__).resolve().parent.parent / "model"
+    possible_paths = [
+        m_dir / "granite-4.0-h-tiny.i1-IQ4_XS.gguf",
+        m_dir / "granite" / "granite-4.0-h-tiny.i1-IQ4_XS.gguf",
+        # m_dir / "granite-4.0-h-tiny-Q4_K_M.gguf", # Commented out; IQ4_XS is primary
+    ]
+    model_path = str(next((p for p in possible_paths if p.exists()), possible_paths[0]))
+    alias_name = "granite-4.0-h-tiny"
+    # Auto-detect GPU build vs pure CPU build capabilities
+    cpu_cores = os.cpu_count() or 4
+    has_gpu_build = False
+    try:
+        ver_res = subprocess.run([LLAMA_SERVER_BIN, "--version"], capture_output=True, text=True)
+        out_str = (ver_res.stdout + ver_res.stderr).lower()
+        if "vulkan" in out_str or "cuda" in out_str or "rocm" in out_str:
+            has_gpu_build = True
+    except Exception:
+        pass
+
+    if has_gpu_build:
+        ngl_flag = os.getenv("LLAMA_NGL", "25")
+        llama_threads = os.getenv("LLAMA_THREADS", str(max(1, cpu_cores // 2)))
+        print(f"[Server] GPU Offload Build detected: Setting -ngl {ngl_flag}, threads = {llama_threads} (half of {cpu_cores} CPU cores)")
     else:
-        model_path = str(Path(__file__).resolve().parent.parent / "model" / "granite" / "granite-4.1-3b-Q4_K_M.gguf")
-        alias_name = "granite-4.1-3b"
-        ngl_flag = "99"
-        llama_ctx = os.getenv("LLAMA_CTX_SIZE_GRANITE", "4096")
+        ngl_flag = "0"
+        llama_threads = os.getenv("LLAMA_THREADS", str(cpu_cores))
+        print(f"[Server] Pure CPU Build detected: Setting -ngl 0, threads = {llama_threads} (all {cpu_cores} CPU cores)")
 
-
+    llama_ctx = os.getenv("LLAMA_CTX_SIZE", os.getenv("LLAMA_CTX_SIZE_GRANITE", "131072"))
     llama_batch = os.getenv("LLAMA_BATCH_SIZE", "2048")
     llama_ubatch = os.getenv("LLAMA_UBATCH_SIZE", "512")
-    llama_threads = os.getenv("LLAMA_THREADS", "4")
     llama_http_threads = os.getenv("LLAMA_HTTP_THREADS", "2")
     llama_cache_ram = os.getenv("LLAMA_CACHE_RAM", "64")
     llama_ctk = os.getenv("LLAMA_CTK", "q8_0")
@@ -816,31 +840,24 @@ def ensure_model_loaded(target_key: str, force_restart: bool = False):
     except Exception:
         can_mlock = False
 
-    has_gpu = False
-    try:
-        res = subprocess.run(["nvidia-smi"], capture_output=True)
-        has_gpu = (res.returncode == 0)
-    except Exception:
-        has_gpu = False
-
-    ngl_flag = "99" if has_gpu else "0"
-
     cmd = [
         LLAMA_SERVER_BIN,
         "-m", model_path,
         "-c", llama_ctx, "-b", llama_batch, "-ub", llama_ubatch, "-t", llama_threads,
         "--port", "8081", "--threads-http", llama_http_threads, "--parallel", "1", "--cache-ram", llama_cache_ram,
         "-ctk", llama_ctk, "-ctv", llama_ctv,
-        "--mmap", "-ngl", ngl_flag, "--jinja",
+        "--load-mode", "mmap", "-ngl", ngl_flag, "--jinja",
         "--alias", alias_name,
     ]
 
-    if can_mlock:
-        cmd.append("--mlock")
-
     env = dict(os.environ)
     env["RADV_PERFTEST"] = "nosam"
-    subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    logs_dir = Path(__file__).resolve().parent.parent / "logs"
+    logs_dir.mkdir(exist_ok=True)
+    llama_log_path = os.path.join(logs_dir, "llama_server.log")
+    log_f = open(llama_log_path, "a")
+    subprocess.Popen(cmd, env=env, stdout=log_f, stderr=log_f)
 
     loaded_online = False
     for _ in range(60):
@@ -855,27 +872,70 @@ def ensure_model_loaded(target_key: str, force_restart: bool = False):
 
     if loaded_online:
         time.sleep(1.0)
-        print(f"[Server] ✓ Swapped model server ONLINE ({target_key}).")
+        print("[Server] ✓ Granite 4.0 H Tiny IQ4_XS model server ONLINE (-ngl 25).")
     else:
-        print(f"[Server Warning] Model server swap to {target_key} took longer than 30s.")
+        print("[Server Warning] Granite 4.0 H Tiny model server startup took longer than 30s.")
 
-    CURRENT_LOADED_MODEL_KEY = target_key
-
-
+    CURRENT_LOADED_MODEL_KEY = "granite"
 
 
-TEACHER_SYSTEM_PROMPT = """You are a Socratic programming tutor named Professor LowaCode powered by Granite 4.1.
+@app.on_event("startup")
+async def startup_event():
+    print("[Server Startup] 🚀 Automatically loading Granite 4.0 H Tiny IQ4_XS into memory...")
+    try:
+        ensure_model_loaded("granite", force_restart=False)
+    except Exception as e:
+        print(f"[Server Startup Warning] Initial model load error: {e}")
 
-## MANDATE
-1. Guide the student step-by-step through solving their coding task without writing code for them.
-2. ABSOLUTELY NO CODE BLOCKS, NO SYNTAX EXPLANATIONS, AND NO DIRECT CODE SOLUTIONS.
-3. Output a short conceptual hint followed by a single clear guiding question to help the student think through the problem themselves.
-4. CRITICAL RULE: Never blindly validate student claims. If a student states incorrect numbers, coefficients, or logic, point out the discrepancy immediately and ask them to re-verify against the problem.
 
-## EXAMPLE DIALOGUE OF CORRECTING STUDENT MISTAKES
-User: For x^2 - 7x + 12 = 0, I think a is 7 and b is 1.
-Assistant: Incorrect. In standard quadratic form ax^2 + bx + c = 0, 'a' is the coefficient of x^2 (which is 1) and 'b' is the coefficient of x (which is -7). 
-Guiding Question: Can you re-identify a, b, and c using this standard form?"""
+
+
+TEACHER_SYSTEM_PROMPT = """You are Professor LowaCode, a master Socratic programming tutor powered by Granite 4.0 H-Tiny.
+
+## WHAT BEING SOCRATIC MEANS
+Being Socratic means you NEVER give textbook lectures or written code solutions.
+Instead, you guide the student step-by-step through a multi-step learning sequence (`Step 1` -> `Step 2` -> `Step 3` -> ...), advancing one step per conversation turn.
+
+## MULTI-STEP PROGRESSION MANDATE (STRICTLY REQUIRED)
+1. **Track Step Progression**: Look at the conversation history to determine the active step number N (e.g. Step 1 for initial question, Step 2 after user answers Step 1, Step 3 after user answers Step 2, etc.).
+2. **Acknowledge & Advance**: Briefly validate the user's answer to the previous step, then immediately introduce Step N.
+3. **Single Step Per Turn**: Output ONLY the single current Step N in your response turn. Do NOT output future steps or full solutions all at once.
+
+## FORMAT MANDATE (STRICTLY REQUIRED FOR EVERY RESPONSE)
+Structure EVERY response using this EXACT format:
+
+### 🛠️ Step N: [Current Step Focus]
+[1-2 sentences acknowledging progress and explaining the concept focus for Step N]
+
+**Your Task**: [Ask 1 clear, actionable guiding question for Step N to lead the student to the next discovery]
+
+## RULES
+1. ADVANCE THE STEP NUMBER (Step 1, Step 2, Step 3...) dynamically as the conversation progresses. NEVER stay stuck repeating Step 1 if the user has already answered it!
+2. ABSOLUTELY NO CODE BLOCKS, NO SYNTAX EXPLANATIONS, AND NO DIRECT ANSWERS.
+3. Keep guiding questions simple and practical so the student can easily answer and move to the next step.
+
+## FEW-SHOT MULTI-TURN CONVERSATION EXAMPLE
+
+User: breakdown polymorphism to me step by step
+Assistant:
+### 🛠️ Step 1: One Action, Different Behaviors
+Imagine a button labeled "Play". On a music app it plays a song, on a video app it plays a movie, and on a game console it starts a game. The action is the exact same ("Play"), but each device responds in its own unique way. In programming, polymorphism allows different objects to respond to the exact same action in their own special way.
+
+**Your Task**: If you have a `Dog` object and a `Cat` object, and both receive the command `make_sound()`, what unique sound would you expect each object to output?
+
+User: The dog will bark and the cat will meow.
+Assistant:
+### 🛠️ Step 2: Method Overriding
+Spot on! Both objects respond to the exact same `make_sound()` method name, but each class provides its own custom implementation. In object-oriented programming, this is called "method overriding", where a subclass redefines a method inherited from a parent class.
+
+**Your Task**: If both `Dog` and `Cat` inherit from a parent class called `Animal`, should the `make_sound()` method be declared first in the `Animal` parent class or only in the child classes?
+
+User: It should be declared in the Animal parent class first.
+Assistant:
+### 🛠️ Step 3: Polymorphic Method Calls
+Exactly right! By declaring `make_sound()` in the parent `Animal` class, you can create a list containing both Dogs and Cats, loop through the list, and call `animal.make_sound()` on every item without needing to know whether it is a Dog or a Cat.
+
+**Your Task**: What major benefit does this provide when you want to add a new `Cow` class to your program in the future?"""
 
 EXPERT_DEVELOPER_SYSTEM_PROMPT = """You are an expert software engineer and direct coding assistant named Professor LowaCode.
 
@@ -1019,18 +1079,16 @@ async def chat_completions(request: Request):
         if injected_text:
             if isinstance(query, list):
                 query.insert(0, {"type": "text", "text": injected_text})
+                last_user_msg["content"] = query
             else:
                 last_user_msg["content"] = f"{injected_text}\nUser Question: {query}"
             print("[Server] Context successfully injected into user message.")
 
         # --- CONTEXT PRUNING MIDDLEWARE ---
-        # 1. Prune the system prompt
+        # 1. System prompt is kept 100% intact so Socratic tutoring rules & mandates are preserved
         for msg in messages:
             if msg.get("role") == "system":
-                original_sys = msg.get("content", "")
-                if original_sys:
-                    msg["content"] = orchestrator.prune_system_prompt_with_colbert(query_text, original_sys, max_additional_blocks=3)
-                    print(f"[DEBUG] Pruned System Prompt:\n{msg['content']}\n[DEBUG] End of System Prompt")
+                print(f"[Server] System Prompt active:\n{msg.get('content', '')[:150]}...\n[Server] End of System Prompt Header")
 
         # 2. Prune the tools list in the request body
         if "tools" in body:
@@ -1044,27 +1102,16 @@ async def chat_completions(request: Request):
     # Call llama.cpp directly on port 8081 with intent & difficulty-based dynamic model target or user override
     try:
         target_key = "granite"
-        if FORCED_MODEL_OVERRIDE == "qwen" or req_session_mode == "fast_ship":
-            target_key = "qwen"
-            model_name = "qwen2.5-coder-3b-instruct"
-            print("[Server] Mode: Fast Ship. Swapping resident model to Qwen 2.5 Coder 3B...")
-        elif FORCED_MODEL_OVERRIDE == "granite" or req_session_mode == "socratic_study":
-            target_key = "granite"
-            model_name = "granite-4.1-3b"
-            print("[Server] Mode: Socratic Study. Swapping resident model to Granite 4.1 3B...")
-        elif intent == "CODE" and orchestrator.is_complex_code_task(query_text):
-            target_key = "qwen"
-            model_name = "qwen2.5-coder-3b-instruct"
-            print("[Server] Intent is CODE & Complexity is HIGH. Swapping to Qwen 2.5 Coder 3B...")
+        model_name = "granite-4.0-h-tiny"
+        if req_session_mode == "fast_ship" or FORCED_MODEL_OVERRIDE == "fast_ship":
+            print("[Server] Mode: Build & Ship Fast (Granite 4.0 H-Tiny + Direct Code System Prompt)")
         else:
-            target_key = "granite"
-            model_name = "granite-4.1-3b"
-            print("[Server] Standard Auto mode active. Loading Granite 4.1 3B...")
+            print("[Server] Mode: Socratic Study (Granite 4.0 H-Tiny + Socratic Tutor System Prompt)")
 
-        ensure_model_loaded(target_key)
+        ensure_model_loaded("granite")
 
         body["model"] = model_name
-        print(f"[Server] Dynamic model target set & verified loaded: {model_name} (Intent: {intent})")
+        print(f"[Server] Dynamic model target set & verified loaded: {model_name}")
             
         # Clean messages by stripping image_url blocks so the text-only model server doesn't crash
         clean_messages = []
@@ -1298,8 +1345,19 @@ async def audio_speech(request: Request):
         print(f"[Speech API Error] {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-PARAKEET_BIN = str(Path(__file__).resolve().parent.parent / "software" / "parakeet.cpp" / "build" / "examples" / "cli" / "parakeet-cli")
-PARAKEET_MODEL = str(Path(__file__).resolve().parent.parent / "model" / "audio" / "tdt-0.6b-v2-q5_k.gguf")
+possible_parakeet_bins = [
+    str(Path(__file__).resolve().parent.parent / "software" / "parakeet.cpp" / "build" / "examples" / "cli" / "parakeet-cli"),
+    str(Path(__file__).resolve().parent.parent.parent / "software" / "parakeet.cpp" / "build" / "examples" / "cli" / "parakeet-cli"),
+    "/home/overwatch886/local_ai_workspace/software/parakeet.cpp/build/examples/cli/parakeet-cli",
+]
+PARAKEET_BIN = next((p for p in possible_parakeet_bins if os.path.exists(p)), possible_parakeet_bins[0])
+
+possible_parakeet_models = [
+    str(Path(__file__).resolve().parent.parent / "model" / "audio" / "tdt-0.6b-v2-q5_k.gguf"),
+    str(Path(__file__).resolve().parent.parent.parent / "model" / "audio" / "tdt-0.6b-v2-q5_k.gguf"),
+    "/home/overwatch886/local_ai_workspace/model/audio/tdt-0.6b-v2-q5_k.gguf",
+]
+PARAKEET_MODEL = next((p for p in possible_parakeet_models if os.path.exists(p)), possible_parakeet_models[0])
 
 @app.post("/v1/audio/transcriptions")
 @app.post("/audio/transcriptions")
