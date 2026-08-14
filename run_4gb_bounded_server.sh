@@ -25,19 +25,16 @@ fi
 
 # --- Memory Budget Configuration ---
 # RAM Budget: 4 GB total
-#   Python Server + FastAPI:    ~120 MB
-#   ColBERT (mmap'd):           ~250 MB
-#   Resident LLM (Granite 4.1): ~2.09 GB
-#   KV Cache (4096 ctx):        ~280 MB
-#   Buffer:                     ~400 MB
-#   ─────────────────────────────────────
-#   Typical peak:               ~3.14 GB  ✓
-#
-#   Vision calls (LFM2.5-VL 695MB + mmproj 583MB = ~1.28 GB):
-#   Resident model stays loaded → brief peak of ~3.8 GB (under 4 GB ceiling).
+#   Python Server + FastAPI:           ~120 MB
+#   ColBERT (mmap'd):                  ~250 MB
+#   Resident LLM (Granite 4.0 H Tiny): ~2.09 GB (offloading 25 layers via -ngl 25)
+#   KV Cache (4096 ctx):               ~280 MB
+#   Buffer:                            ~400 MB
+#   ──────────────────────────────────────────
+#   Typical peak:                      ~3.14 GB  ✓
 
-export LLAMA_CTX_SIZE_GRANITE="10240"
-export LLAMA_CTX_SIZE_QWEN="10240"
+export LLAMA_CTX_SIZE="4096"
+export LLAMA_CTX_SIZE_GRANITE="4096"
 export LLAMA_BATCH_SIZE="2048"
 export LLAMA_UBATCH_SIZE="512"
 export LLAMA_THREADS="4"
@@ -54,7 +51,7 @@ export COLBERT_CHUNK_OVERLAP="200"
 echo "========================================================"
 echo "🛡️  Launching Local Orchestrator under HARD 4 GB RAM Cap"
 echo "========================================================"
-echo "  LLAMA_CTX_SIZE   = 10240 (Fast Ship Qwen) | 4096 (Granite)"
+echo "  LLAMA_CTX_SIZE   = 4096 (Granite 4.0 H Tiny Q4_K_S)"
 echo "  LLAMA_CACHE_RAM  = ${LLAMA_CACHE_RAM} MB"
 echo "  COLBERT_THREADS  = ${COLBERT_THREADS}"
 echo "========================================================"
