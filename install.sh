@@ -235,7 +235,7 @@ print_success "Model verification & downloading complete."
 
 # [9/11] Fix hardcoded paths across scripts
 print_step 9 "Fixing workspace paths in Python and Shell scripts..."
-find "$WORKSPACE_DIR" -type f \( -name "*.py" -o -name "*.sh" \) ! -path "*/venv/*" ! -path "*/software/*" -exec sed -i "s|/home/overwatch886/team-codewatch-adtc-2026-submission|$WORKSPACE_DIR|g" {} + 2>/dev/null || true
+find "$WORKSPACE_DIR" -type f \( -name "*.py" -o -name "*.sh" \) ! -path "*/venv/*" ! -path "*/software/*" -exec sed -i "s|/home/overwatch886/local_ai_workspace/code-persona-adtc-2026-submission|$WORKSPACE_DIR|g" {} + 2>/dev/null || true
 print_success "Workspace paths updated."
 
 # [10/11] Create start.sh and make scripts executable
