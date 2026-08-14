@@ -9,7 +9,7 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MODEL_DIR="$HERE/model"
+MODEL_DIR="$HERE/model/granite"
 MODEL_FILE="$MODEL_DIR/granite-4.0-h-tiny.i1-IQ4_XS.gguf"
 
 # ── Replace this URL with your public model weight URL ─────────────────────────

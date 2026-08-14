@@ -793,90 +793,89 @@ def ensure_model_loaded(target_key: str = "granite", force_restart: bool = False
         subprocess.run(["fuser", "-k", "8081/tcp"], capture_output=True)
         time.sleep(1)
 
-    LLAMA_SERVER_BIN = str(Path(__file__).resolve().parent.parent / "software" / "llama.cpp" / "build" / "bin" / "llama-server")
+        LLAMA_SERVER_BIN = str(Path(__file__).resolve().parent.parent / "software" / "llama.cpp" / "build" / "bin" / "llama-server")
 
-    m_dir = Path(__file__).resolve().parent.parent / "model"
-    possible_paths = [
-        m_dir / "granite-4.0-h-tiny.i1-IQ4_XS.gguf",
-        m_dir / "granite" / "granite-4.0-h-tiny.i1-IQ4_XS.gguf",
-        # m_dir / "granite-4.0-h-tiny-Q4_K_M.gguf", # Commented out; IQ4_XS is primary
-    ]
-    model_path = str(next((p for p in possible_paths if p.exists()), possible_paths[0]))
-    alias_name = "granite-4.0-h-tiny"
-    # Auto-detect GPU build vs pure CPU build capabilities
-    cpu_cores = os.cpu_count() or 4
-    has_gpu_build = False
-    try:
-        ver_res = subprocess.run([LLAMA_SERVER_BIN, "--version"], capture_output=True, text=True)
-        out_str = (ver_res.stdout + ver_res.stderr).lower()
-        if "vulkan" in out_str or "cuda" in out_str or "rocm" in out_str:
-            has_gpu_build = True
-    except Exception:
-        pass
-
-    if has_gpu_build:
-        ngl_flag = os.getenv("LLAMA_NGL", "25")
-        llama_threads = os.getenv("LLAMA_THREADS", str(max(1, cpu_cores // 2)))
-        print(f"[Server] GPU Offload Build detected: Setting -ngl {ngl_flag}, threads = {llama_threads} (half of {cpu_cores} CPU cores)")
-    else:
-        ngl_flag = "0"
-        llama_threads = os.getenv("LLAMA_THREADS", str(cpu_cores))
-        print(f"[Server] Pure CPU Build detected: Setting -ngl 0, threads = {llama_threads} (all {cpu_cores} CPU cores)")
-
-    llama_ctx = os.getenv("LLAMA_CTX_SIZE", os.getenv("LLAMA_CTX_SIZE_GRANITE", "131072"))
-    llama_batch = os.getenv("LLAMA_BATCH_SIZE", "2048")
-    llama_ubatch = os.getenv("LLAMA_UBATCH_SIZE", "512")
-    llama_http_threads = os.getenv("LLAMA_HTTP_THREADS", "2")
-    llama_cache_ram = os.getenv("LLAMA_CACHE_RAM", "64")
-    llama_ctk = os.getenv("LLAMA_CTK", "q8_0")
-    llama_ctv = os.getenv("LLAMA_CTV", "q8_0")
-
-    # Auto-detect container vs bare-metal capabilities
-    import resource
-    can_mlock = False
-    try:
-        soft_mem, hard_mem = resource.getrlimit(resource.RLIMIT_MEMLOCK)
-        can_mlock = (hard_mem == resource.RLIM_INFINITY or hard_mem > 1024 * 1024 * 1024)
-    except Exception:
-        can_mlock = False
-
-    cmd = [
-        LLAMA_SERVER_BIN,
-        "-m", model_path,
-        "-c", llama_ctx, "-b", llama_batch, "-ub", llama_ubatch, "-t", llama_threads,
-        "--port", "8081", "--threads-http", llama_http_threads, "--parallel", "1", "--cache-ram", llama_cache_ram,
-        "-ctk", llama_ctk, "-ctv", llama_ctv,
-        "--load-mode", "mmap", "-ngl", ngl_flag, "--jinja",
-        "--alias", alias_name,
-    ]
-
-    env = dict(os.environ)
-    env["RADV_PERFTEST"] = "nosam"
-
-    logs_dir = Path(__file__).resolve().parent.parent / "logs"
-    logs_dir.mkdir(exist_ok=True)
-    llama_log_path = os.path.join(logs_dir, "llama_server.log")
-    log_f = open(llama_log_path, "a")
-    subprocess.Popen(cmd, env=env, stdout=log_f, stderr=log_f)
-
-    loaded_online = False
-    for _ in range(60):
+        m_dir = Path(__file__).resolve().parent.parent / "model"
+        possible_paths = [
+            m_dir / "granite-4.0-h-tiny.i1-IQ4_XS.gguf",
+            m_dir / "granite" / "granite-4.0-h-tiny.i1-IQ4_XS.gguf",
+        ]
+        model_path = str(next((p for p in possible_paths if p.exists()), possible_paths[0]))
+        alias_name = "granite-4.0-h-tiny"
+        # Auto-detect GPU build vs pure CPU build capabilities
+        cpu_cores = os.cpu_count() or 4
+        has_gpu_build = False
         try:
-            r = requests.get("http://127.0.0.1:8081/health", timeout=1.0)
-            if r.status_code == 200 and r.json().get("status") == "ok":
-                loaded_online = True
-                break
+            ver_res = subprocess.run([LLAMA_SERVER_BIN, "--version"], capture_output=True, text=True)
+            out_str = (ver_res.stdout + ver_res.stderr).lower()
+            if "vulkan" in out_str or "cuda" in out_str or "rocm" in out_str:
+                has_gpu_build = True
         except Exception:
             pass
-        time.sleep(0.5)
 
-    if loaded_online:
-        time.sleep(1.0)
-        print("[Server] ✓ Granite 4.0 H Tiny IQ4_XS model server ONLINE (-ngl 25).")
-    else:
-        print("[Server Warning] Granite 4.0 H Tiny model server startup took longer than 30s.")
+        if has_gpu_build:
+            ngl_flag = os.getenv("LLAMA_NGL", "25")
+            llama_threads = os.getenv("LLAMA_THREADS", str(max(1, cpu_cores // 2)))
+            print(f"[Server] GPU Offload Build detected: Setting -ngl {ngl_flag}, threads = {llama_threads} (half of {cpu_cores} CPU cores)")
+        else:
+            ngl_flag = "0"
+            llama_threads = os.getenv("LLAMA_THREADS", str(cpu_cores))
+            print(f"[Server] Pure CPU Build detected: Setting -ngl 0, threads = {llama_threads} (all {cpu_cores} CPU cores)")
 
-    CURRENT_LOADED_MODEL_KEY = "granite"
+        llama_ctx = os.getenv("LLAMA_CTX_SIZE", os.getenv("LLAMA_CTX_SIZE_GRANITE", "8192"))
+        llama_batch = os.getenv("LLAMA_BATCH_SIZE", "2048")
+        llama_ubatch = os.getenv("LLAMA_UBATCH_SIZE", "512")
+        llama_http_threads = os.getenv("LLAMA_HTTP_THREADS", "2")
+        llama_cache_ram = os.getenv("LLAMA_CACHE_RAM", "64")
+        llama_ctk = os.getenv("LLAMA_CTK", "q8_0")
+        llama_ctv = os.getenv("LLAMA_CTV", "q8_0")
+
+        # Auto-detect container vs bare-metal capabilities
+        import resource
+        can_mlock = False
+        try:
+            soft_mem, hard_mem = resource.getrlimit(resource.RLIMIT_MEMLOCK)
+            can_mlock = (hard_mem == resource.RLIM_INFINITY or hard_mem > 1024 * 1024 * 1024)
+        except Exception:
+            can_mlock = False
+
+        cmd = [
+            LLAMA_SERVER_BIN,
+            "-m", model_path,
+            "-c", llama_ctx, "-b", llama_batch, "-ub", llama_ubatch, "-t", llama_threads,
+            "--port", "8081", "--threads-http", llama_http_threads, "--parallel", "1", "--cache-ram", llama_cache_ram,
+            "-ctk", llama_ctk, "-ctv", llama_ctv,
+            "--load-mode", "mmap", "-ngl", ngl_flag, "--jinja",
+            "--alias", alias_name,
+        ]
+
+        env = dict(os.environ)
+        env["RADV_PERFTEST"] = "nosam"
+
+        logs_dir = Path(__file__).resolve().parent.parent / "logs"
+        logs_dir.mkdir(exist_ok=True)
+        llama_log_path = os.path.join(logs_dir, "llama_server.log")
+        log_f = open(llama_log_path, "a")
+        subprocess.Popen(cmd, env=env, stdout=log_f, stderr=log_f)
+
+        loaded_online = False
+        for _ in range(60):
+            try:
+                r = requests.get("http://127.0.0.1:8081/health", timeout=1.0)
+                if r.status_code == 200 and r.json().get("status") == "ok":
+                    loaded_online = True
+                    break
+            except Exception:
+                pass
+            time.sleep(0.5)
+
+        if loaded_online:
+            time.sleep(1.0)
+            print("[Server] ✓ Granite 4.0 H Tiny IQ4_XS model server ONLINE (-ngl 25).")
+        else:
+            print("[Server Warning] Granite 4.0 H Tiny model server startup took longer than 30s.")
+
+        CURRENT_LOADED_MODEL_KEY = "granite"
 
 
 @app.on_event("startup")
