@@ -3,7 +3,6 @@
 *.bin
 *.safetensors
 model/
-answerai-colbert-small-v1/
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
@@ -37,8 +36,10 @@ key.pub
 *.pem
 *.key
 
-# llama.cpp
-software/llama.cpp
-
-# Other folders
+# Software & Dependencies
+software/
 scratch/
+
+# Test Scripts & TODO
+test_scripts/
+docs/todo.md

@@ -3,8 +3,7 @@
 #
 # NOTE: The competition benchmark model is handled separately by download_model.sh.
 #       This script downloads everything else the system needs to run fully:
-#         • Granite 4.1 3B  (Socratic / Auto mode LLM)
-#         • Qwen 2.5 Coder 3B  (Ship Fast coding LLM)
+#         • Granite 4.0 h tiny  (Socratic / Auto mode LLM and Ship Fast coding LLM)
 #         • ColBERT ONNX  (semantic search / RAG)
 #         • Kokoro TTS  (text-to-speech, optional)
 #         • Parakeet TDT ASR  (speech-to-text, optional)
@@ -24,9 +23,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODEL_DIR="$HERE/model"
 
 mkdir -p "$MODEL_DIR/granite"
-mkdir -p "$MODEL_DIR/qwen"
 mkdir -p "$MODEL_DIR/audio/kokoro"
-mkdir -p "$HERE/answerai-colbert-small-v1"
+mkdir -p "$MODEL_DIR/answerai-colbert-small-v1"
 
 # ── Helper: direct URL download ────────────────────────────────────────────────
 download_file() {
@@ -56,7 +54,7 @@ hf_download() {
     done
     if [[ -n "$HF_CLI" ]]; then
         "$HF_CLI" download "$repo" "$file" \
-            --local-dir "$(dirname "$dest")" --local-dir-use-symlinks False
+            --local-dir "$(dirname "$dest")"
     else
         download_file "https://huggingface.co/${repo}/resolve/main/${file}" "$dest"
     fi
@@ -69,31 +67,24 @@ echo "║        LowaCode AI Tutor — Model Downloader         ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 
-# [1/5] Granite 4.1 3B Q4_K_M — Socratic Tutor / Auto mode
-info "[1/5] Granite 4.1 3B (Socratic Tutor / Auto mode)"
+# [1/4] Granite 4.0 H Tiny Q4_K_S — Single Resident LLM
+info "[1/4] Granite 4.0 H Tiny Q4_K_S (Single Resident LLM)"
 hf_download \
-    "ibm-granite/granite-4.1-3b-GGUF" \
-    "granite-4.1-3b-Q4_K_M.gguf" \
-    "$MODEL_DIR/granite/granite-4.1-3b-Q4_K_M.gguf"
+    "mradermacher/granite-4.0-h-tiny-i1-GGUF" \
+    "granite-4.0-h-tiny.i1-IQ4_XS.gguf" \
+    "$MODEL_DIR/granite/granite-4.0-h-tiny.i1-IQ4_XS.gguf"
 
-# [2/5] Qwen 2.5 Coder 3B Q4_K_M — Ship Fast coding mode
-info "[2/5] Qwen 2.5 Coder 3B (Ship Fast / coding mode)"
-hf_download \
-    "Qwen/Qwen2.5-Coder-3B-Instruct-GGUF" \
-    "qwen2.5-coder-3b-instruct-q4_k_m.gguf" \
-    "$MODEL_DIR/qwen/qwen2.5-coder-3b-instruct-q4_k_m.gguf"
-
-# [3/5] ColBERT ONNX — semantic RAG search
-info "[3/5] ColBERT ONNX (answerai-colbert-small-v1)"
+# [2/4] ColBERT ONNX — semantic RAG search
+info "[2/4] ColBERT ONNX (answerai-colbert-small-v1)"
 for f in config.json model_int8.onnx special_tokens_map.json \
           tokenizer.json tokenizer_config.json vocab.txt; do
     download_file \
         "https://huggingface.co/AnswerDotAI/answerai-colbert-small-v1/resolve/main/$f" \
-        "$HERE/answerai-colbert-small-v1/$f"
+        "$MODEL_DIR/answerai-colbert-small-v1/$f"
 done
 
-# [4/5] Kokoro TTS — text-to-speech (optional)
-info "[4/5] Kokoro TTS v1.0"
+# [3/4] Kokoro TTS — text-to-speech (optional)
+info "[3/4] Kokoro TTS v1.0"
 download_file \
     "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx" \
     "$MODEL_DIR/audio/kokoro/kokoro-v1.0.onnx"
@@ -101,8 +92,8 @@ download_file \
     "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin" \
     "$MODEL_DIR/audio/kokoro/voices-v1.0.bin"
 
-# [5/5] Parakeet TDT — speech-to-text (optional)
-info "[5/5] Parakeet TDT ASR"
+# [4/4] Parakeet TDT — speech-to-text (optional)
+info "[4/4] Parakeet TDT ASR"
 download_file \
     "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/tdt-0.6b-v2-q5_k.gguf" \
     "$MODEL_DIR/audio/tdt-0.6b-v2-q5_k.gguf"
@@ -113,7 +104,7 @@ echo "║  🎉  All supporting models downloaded!              ║"
 echo "║                                                      ║"
 echo "║  Next steps:                                         ║"
 echo "║    1. ./download_model.sh   (competition model)     ║"
-echo "║    2. ./install_linux.sh    (or install_wsl.sh)     ║"
+echo "║    2. ./install.sh          (setup environment)     ║"
 echo "║    3. ./start.sh            (launch server)         ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""

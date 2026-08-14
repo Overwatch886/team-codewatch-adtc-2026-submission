@@ -12,7 +12,8 @@ import onnxruntime as rt
 from kokoro_onnx import Kokoro
 
 # Configuration Paths
-WORKSPACE_DIR = "/home/overwatch886/team-codewatch-adtc-2026-submission"
+from pathlib import Path
+WORKSPACE_DIR = str(Path(__file__).resolve().parent.parent)
 PARAKEET_BIN = f"{WORKSPACE_DIR}/software/parakeet.cpp/build/examples/cli/parakeet-cli"
 ASR_MODEL = f"{WORKSPACE_DIR}/model/nemotron-3.5-asr-streaming-0.6b-q5_k.gguf"
 KOKORO_MODEL = f"{WORKSPACE_DIR}/model/kokoro/kokoro-v1.0.onnx"

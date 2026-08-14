@@ -20,7 +20,14 @@ import pathlib
 # All paths are relative to this file's location (repo root)
 _HERE = pathlib.Path(__file__).resolve().parent
 
-MODEL_DIR = str(os.getenv("COLBERT_MODEL_DIR") or _HERE / "model" / "answerai-colbert-small-v1")
+candidate_model_dirs = [
+    str(os.getenv("COLBERT_MODEL_DIR")) if os.getenv("COLBERT_MODEL_DIR") and os.path.isdir(os.getenv("COLBERT_MODEL_DIR")) else "",
+    str(_HERE / "model" / "answerai-colbert-small-v1"),
+    str(_HERE / "models" / "answerai-colbert-small-v1"),
+    str(_HERE.parent / "model" / "answerai-colbert-small-v1"),
+    str(_HERE.parent / "models" / "answerai-colbert-small-v1"),
+]
+MODEL_DIR = next((p for p in candidate_model_dirs if p and os.path.isdir(p)), str(_HERE / "model" / "answerai-colbert-small-v1"))
 MODEL_FILE = "model_int8.onnx"
 
 RETRIEVAL_DIR = str(os.getenv("COLBERT_RETRIEVAL_DIR") or _HERE / "scripts")
@@ -48,9 +55,10 @@ def load_model():
     if tokenizer is not None and session is not None:
         return
 
-    print("Loading tokenizer...")
+    print(f"Loading tokenizer from {MODEL_DIR}...")
     tokenizer = AutoTokenizer.from_pretrained(
-        MODEL_DIR
+        MODEL_DIR,
+        local_files_only=True
     )
 
     print("Loading ONNX model...")

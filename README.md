@@ -35,13 +35,13 @@ code-persona-adtc-2026-submission/
 ├── metadata.json                ← Required competition metadata & test prompts
 ├── download_model.sh            ← Benchmark model downloader script
 ├── download_models.sh           ← Supporting models downloader (Granite, Qwen, ColBERT, Audio)
-├── install_linux.sh             ← Automated installer script for native Linux
-├── install_wsl.sh               ← Automated installer script for Windows WSL2
+├── install.sh                   ← Automated installer script (native Linux & Windows WSL2)
 ├── run_4gb_bounded_server.sh    ← Main memory-bounded server launcher script
 ├── requirements.txt             ← Python dependencies
 ├── acolbert.py                  ← Local ColBERT Late-Interaction RAG & On-The-Fly Indexer
 ├── build_colbert_index.py       ← Local document indexing script
 ├── scripts/
+    |- orchestrator.py -- Contains extended orchestrator logic
 │   ├── orchestrator_server.py   ← Local FastAPI Orchestrator, TTS & Teacher Prompt Manager
 │   └── setup_system_permanently.sh ← System performance & memory tuning script
 └── static/
@@ -68,21 +68,18 @@ sudo ./scripts/setup_system_permanently.sh
 ```
 
 ### 3. Automated Installation
-For native Linux (Ubuntu, Debian, Fedora, Arch):
+For native Linux (Ubuntu, Debian, Fedora, Arch) and Windows WSL2:
 ```bash
-./install_linux.sh
+./install.sh
 ```
 
-For Windows users running WSL2(WSl2 has to have been setup with Ubuntu 22.04):
+### 4. Launch Service Under Hard RAM Cap
+Start the orchestrator server using the canonical launcher:
 ```bash
-./install_wsl.sh
+./start.sh
 ```
-
-### 4. Launch Service Under 4 GB RAM Cap
-Start the orchestrator server:
-```bash
-./run_4gb_bounded_server.sh
 ```
+*(Or launch directly under 6 GB RAM cgroup enforcement with `./run_6gb_bounded_server.sh`).*
 
 ### 5. Open Web Dashboard
 Navigate to `http://localhost:8085` in your browser. (If using WSL2, open `http://localhost:8085` directly in Windows browser).
