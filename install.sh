@@ -29,7 +29,7 @@ print_error() {
     echo -e "${RED}✗ $1${NC}"
 }
 
-# [1/11] Detect distro and install Ubuntu 22.04 system deps
+# [1/11] Detect distro and install system deps
 print_step 1 "Detecting OS and installing dependencies..."
 if [ -f /etc/os-release ]; then
     . /etc/os-release
@@ -183,7 +183,6 @@ if [ -f "$LLAMA_DIR/build/bin/llama-server" ]; then
 else
     cd "$LLAMA_DIR"
     rm -rf build
-    # Target-specific build: compile ONLY llama-server, llama-cli, and llama-bench binaries for fast build speed
     if ! cmake -B build $CMAKE_FLAGS || ! cmake --build build --config Release --target llama-server llama-cli llama-bench -j $(nproc) 2>/dev/null; then
         if ! cmake --build build --config Release --target server main bench -j $(nproc) 2>/dev/null; then
             print_warning "Build with ${CMAKE_FLAGS} failed. Falling back to CPU build (-DGGML_NATIVE=ON)..."
@@ -226,71 +225,17 @@ fi
 pip install huggingface_hub psutil
 print_success "Python requirements installed."
 
-# Helper for model auditing
-audit_model_file() {
-    local file_path="$1"
-    local min_size_bytes="$2"
-    if [ -f "$file_path" ]; then
-        local file_size
-        file_size=$(stat -c%s "$file_path" 2>/dev/null || stat -f%z "$file_path" 2>/dev/null || echo 0)
-        if [ "$file_size" -ge "$min_size_bytes" ]; then
-            return 0
-        fi
-    fi
-    return 1
-}
-
-# Helper for HuggingFace download (tries new 'hf' CLI first, falls back to 'huggingface-cli')
-hf_download() {
-    local venv_bin="$WORKSPACE_DIR/venv/bin"
-    if [ -x "$venv_bin/hf" ]; then
-        "$venv_bin/hf" download "$@"
-    elif command -v hf >/dev/null 2>&1; then
-        hf download "$@"
-    elif [ -x "$venv_bin/huggingface-cli" ]; then
-        "$venv_bin/huggingface-cli" download "$@"
-    elif command -v huggingface-cli >/dev/null 2>&1; then
-        huggingface-cli download "$@"
-    else
-        python3 -m huggingface_hub.cli.hf_api download "$@"
-    fi
-}
-
-# [6/11] Download ColBERT model
-print_step 6 "Downloading ColBERT semantic search model..."
-COLBERT_DIR="$WORKSPACE_DIR/model/answerai-colbert-small-v1"
-mkdir -p "$COLBERT_DIR"
-if audit_model_file "$COLBERT_DIR/model_int8.onnx" 10000000; then
-    print_success "ColBERT model already exists and is complete."
-else
-    hf_download answerdotai/answerai-colbert-small-v1 --local-dir "$COLBERT_DIR"
-    print_success "ColBERT model downloaded."
+# [6/11] Download required models via download_models.sh & download_model.sh
+print_step 6 "Running model downloader scripts..."
+if [ -f "$WORKSPACE_DIR/download_models.sh" ]; then
+    chmod +x "$WORKSPACE_DIR/download_models.sh"
+    "$WORKSPACE_DIR/download_models.sh"
 fi
-
-# [7/11] Download Granite model
-print_step 7 "Downloading IBM Granite model..."
-GRANITE_DIR="$WORKSPACE_DIR/model/granite"
-mkdir -p "$GRANITE_DIR"
-if audit_model_file "$GRANITE_DIR/granite-4.1-3b-Q4_K_M.gguf" 1000000000; then
-    print_success "Granite model already exists and is complete."
-else
-    hf_download ibm-granite/granite-4.1-3b-GGUF granite-4.1-3b-Q4_K_M.gguf --local-dir "$GRANITE_DIR"
-    print_success "Granite model downloaded."
-fi
-
-# [8/11] Download Qwen model
-print_step 8 "Downloading Qwen model..."
-QWEN_DIR="$WORKSPACE_DIR/model/qwen"
-mkdir -p "$QWEN_DIR"
-if audit_model_file "$QWEN_DIR/qwen2.5-coder-3b-instruct-q4_k_m.gguf" 1000000000; then
-    print_success "Qwen model already exists and is complete."
-else
-    hf_download Qwen/Qwen2.5-Coder-3B-Instruct-GGUF qwen2.5-coder-3b-instruct-q4_k_m.gguf --local-dir "$QWEN_DIR"
-fi
+print_success "Model verification & downloading complete."
 
 # [9/11] Fix hardcoded paths across scripts
 print_step 9 "Fixing workspace paths in Python and Shell scripts..."
-find "$WORKSPACE_DIR" -type f \( -name "*.py" -o -name "*.sh" \) ! -path "*/venv/*" ! -path "*/software/*" -exec sed -i "s|/home/overwatch886/team-codewatch-adtc-2026-submission|$WORKSPACE_DIR|g" {} + 2>/dev/null || true
+find "$WORKSPACE_DIR" -type f \( -name "*.py" -o -name "*.sh" \) ! -path "*/venv/*" ! -path "*/software/*" -exec sed -i "s|/home/overwatch886/local_ai_workspace/code-persona-adtc-2026-submission|$WORKSPACE_DIR|g" {} + 2>/dev/null || true
 print_success "Workspace paths updated."
 
 # [10/11] Create start.sh and make scripts executable

@@ -35,13 +35,13 @@ code-persona-adtc-2026-submission/
 ├── metadata.json                ← Required competition metadata & test prompts
 ├── download_model.sh            ← Benchmark model downloader script
 ├── download_models.sh           ← Supporting models downloader (Granite, Qwen, ColBERT, Audio)
-├── install_linux.sh             ← Automated installer script for native Linux
-├── install_wsl.sh               ← Automated installer script for Windows WSL2
+├── install.sh                   ← Automated installer script (native Linux & Windows WSL2)
 ├── run_4gb_bounded_server.sh    ← Main memory-bounded server launcher script
 ├── requirements.txt             ← Python dependencies
 ├── acolbert.py                  ← Local ColBERT Late-Interaction RAG & On-The-Fly Indexer
 ├── build_colbert_index.py       ← Local document indexing script
 ├── scripts/
+    |- orchestrator.py -- Contains extended orchestrator logic
 │   ├── orchestrator_server.py   ← Local FastAPI Orchestrator, TTS & Teacher Prompt Manager
 │   └── setup_system_permanently.sh ← System performance & memory tuning script
 └── static/
@@ -68,15 +68,7 @@ sudo ./scripts/setup_system_permanently.sh
 ```
 
 ### 3. Automated Installation
-For native Linux (Ubuntu, Debian, Fedora, Arch):
-```bash
-./install_linux.sh
-```
-
-For Windows users running WSL2(WSl2 has to have been setup with Ubuntu 22.04):
-```bash
-./install_wsl.sh
-```
+WSL2 users can also run `./install_wsl.sh`, which simply forwards to the script above.
 
 ### 4. Launch Service Under 4 GB RAM Cap
 Start the orchestrator server:

@@ -17,8 +17,8 @@ from openai import OpenAI
 ROUTER_URL = "http://127.0.0.1:5000/analyze"
 RAG_URL = "http://127.0.0.1:8000/search"
 RAG_TOP_K = 4
-DEFAULT_MENTOR_MODEL = "granite-4.1-3b"
-EXPERT_CODE_MODEL = "qwen2.5-coder-3b-instruct"
+DEFAULT_MENTOR_MODEL = "granite-4.0-h-tiny"
+EXPERT_CODE_MODEL = "granite-4.0-h-tiny"
 CHAT_MODEL = os.getenv("LITELLM_CHAT_MODEL", DEFAULT_MENTOR_MODEL)
 IMAGE_EXTENSION_PATTERN = re.compile(r"\.(png|jpe?g|webp|bmp|gif|tiff?)\b", re.IGNORECASE)
 IMAGE_WORD_PATTERN = re.compile(r"\b(image|photo|picture|screenshot|diagram)\b", re.IGNORECASE)
@@ -62,8 +62,6 @@ def init_intent_embeddings():
     if encoded_intents:
         return
     print("[Orchestrator] Pre-encoding ColBERT intent descriptions...")
-    # Override MODEL_DIR to absolute path so it runs correctly regardless of cwd
-    acolbert.MODEL_DIR = "/home/overwatch886/local_ai_workspace/answerai-colbert-small-v1"
     for intent, desc in INTENT_DESCRIPTIONS.items():
         encoded_intents[intent] = acolbert.encode(desc)
     print("[Orchestrator] Intent descriptions encoded successfully.")
@@ -436,26 +434,16 @@ def run_vision_cli_once(
     )
 
     stdout = completed.stdout
-    description = stdout
-    marker = f"> {prompt}"
-    idx = stdout.find(marker)
-    if idx != -1:
-        description = stdout[idx + len(marker):]
-    else:
-        # Fallback to last '>'
-        idx_gt = stdout.rfind(">")
-        if idx_gt != -1:
-            description = stdout[idx_gt + 1:]
-
-    # Clean up lines (filter out benchmark metrics and exit messages)
     clean_lines = []
-    for line in description.splitlines():
+    for line in stdout.splitlines():
         line_strip = line.strip()
         if not line_strip:
             continue
+        if line_strip.startswith("llama_") or line_strip.startswith("system_info:") or line_strip.startswith("main:") or line_strip.startswith("load_"):
+            continue
         if line_strip.startswith("[") and ("t/s" in line_strip or "tokens" in line_strip):
             continue
-        if line_strip == "Exiting...":
+        if line_strip == "Exiting..." or line_strip.startswith("Log start"):
             continue
         clean_lines.append(line)
 
@@ -527,6 +515,7 @@ def build_vision_context(query: str, image_paths: List[str]) -> str:
         descriptions.append(
             f"\n--- Vision Description ({image_path}) ---\n{description_text}\n"
         )
+    return "\n".join(descriptions)
 
 def is_complex_code_task(query_text: str) -> bool:
     query_lower = query_text.lower()
