@@ -63,6 +63,9 @@ sounddevice>=0.5.0
 cffi==2.1.0             # soundfile/sounddevice bind via CFFI
 pycparser==3.0
 
+# --- Speech-to-Text: Parakeet TDT (parakeet.cpp) ---
+# parakeet.cpp CLI (software/parakeet.cpp) runs offline Parakeet TDT ASR (models/audio/tdt-0.6b-v2-q5_k.gguf)
+
 # --- Document parsing ---
 pypdf>=5.0.0
 
