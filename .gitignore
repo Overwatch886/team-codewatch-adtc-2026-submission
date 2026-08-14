@@ -37,8 +37,10 @@ key.pub
 *.pem
 *.key
 
-# llama.cpp
-software/llama.cpp
+# Software
+software/
 
 # Other folders
 scratch/
+docs/todo.md
+test_scripts/
