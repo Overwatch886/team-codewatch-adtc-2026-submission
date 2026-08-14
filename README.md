@@ -68,13 +68,18 @@ sudo ./scripts/setup_system_permanently.sh
 ```
 
 ### 3. Automated Installation
-WSL2 users can also run `./install_wsl.sh`, which simply forwards to the script above.
-
-### 4. Launch Service Under 4 GB RAM Cap
-Start the orchestrator server:
+For native Linux (Ubuntu, Debian, Fedora, Arch) and Windows WSL2:
 ```bash
-./run_4gb_bounded_server.sh
+./install.sh
 ```
+
+### 4. Launch Service Under Hard RAM Cap
+Start the orchestrator server using the canonical launcher:
+```bash
+./start.sh
+```
+```
+*(Or launch directly under 6 GB RAM cgroup enforcement with `./run_6gb_bounded_server.sh`).*
 
 ### 5. Open Web Dashboard
 Navigate to `http://localhost:8085` in your browser. (If using WSL2, open `http://localhost:8085` directly in Windows browser).
