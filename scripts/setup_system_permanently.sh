@@ -244,30 +244,38 @@ else
     SERVICE_FILE="/etc/systemd/system/llm-sys-tune.service"
     SERVICE_SCRIPT="/usr/local/bin/llm-sys-tune.sh"
     
-    # Create the tuning script
+    # Create the universal CPU tuning script
     cat > "$SERVICE_SCRIPT" <<'EOF'
 #!/usr/bin/env bash
-# Set THP to madvise
+# 1. Set THP to madvise
 if [[ -f /sys/kernel/mm/transparent_hugepage/enabled ]]; then
     echo madvise > /sys/kernel/mm/transparent_hugepage/enabled
 fi
 
-# Set CPU governor to performance
+# 2. Universal Linux cpufreq scaling governor -> performance (Intel & AMD)
 for governor in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
     if [[ -f "$governor" ]]; then
-        echo performance > "$governor"
+        echo performance > "$governor" 2>/dev/null || true
     fi
 done
 
-# Apply RyzenAdj power limits (22W, 82°C throttle)
-# These settings do not survive reboot, so they must be reapplied on every boot
+# 3. Universal power-profiles-daemon profile -> performance (Intel & AMD)
+if command -v powerprofilesctl &>/dev/null; then
+    powerprofilesctl set performance 2>/dev/null || true
+fi
+
+# 4. Intel CPU Specific Turbo Boost (intel_pstate)
+if [[ -f /sys/devices/system/cpu/intel_pstate/no_turbo ]]; then
+    echo 0 > /sys/devices/system/cpu/intel_pstate/no_turbo 2>/dev/null || true
+fi
+
+# 5. AMD CPU Specific Boost (amd_pstate / ryzenadj)
+if [[ -f /sys/devices/system/cpu/amd_pstate/status ]]; then
+    echo active > /sys/devices/system/cpu/amd_pstate/status 2>/dev/null || true
+fi
+
 if command -v ryzenadj &> /dev/null; then
-    ryzenadj \
-        --stapm-limit=22000 \
-        --fast-limit=22000 \
-        --slow-limit=22000 \
-        --tctl-temp=82 \
-        2>/dev/null || true
+    ryzenadj --stapm-limit=22000 --fast-limit=22000 --slow-limit=22000 --tctl-temp=82 2>/dev/null || true
 fi
 EOF
     chmod +x "$SERVICE_SCRIPT"
