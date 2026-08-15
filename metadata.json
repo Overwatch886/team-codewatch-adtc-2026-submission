@@ -12,7 +12,7 @@
   "cross_disciplinary_pairing": {
     "discipline": "education",
     "load_bearing": true,
-    "description": "Despite being majorly a coding assistant, this project can also help both students and educators review course materials and study them as well as extract key details from them through its rag agentic system which helps extract key details in bulky materials simplifying the study process for students and simplifying the process of creating lecture materials from other sources for educators."
+    "description": "This project help students learn coding concepts step by step without giving them answers directly better fostering learning."
   },
   "test_prompts": [
     {
