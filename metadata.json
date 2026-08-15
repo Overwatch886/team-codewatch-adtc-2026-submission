@@ -1,5 +1,5 @@
 {
-  "team_id": "code-persona",
+  "team_id": "1076684-code-persona",
   "domain": "coding_assistants",
   "language_scope": ["en"],
   "african_alpha_claim": false,
@@ -12,12 +12,13 @@
   "cross_disciplinary_pairing": {
     "discipline": "education",
     "load_bearing": true,
-    "description": "This project help students learn coding concepts step by step without giving them answers directly better fostering learning."
+    "description": "This project helps students learn coding concepts step by step, guiding them by asking probing questions that force them to think and learn the answers themselves rather than giving them the answers directly."
   },
   "test_prompts": [
     {
       "prompt_id": "tp_001",
-      "prompt": "Explain how to reverse a linked list."
+      "prompt": "My loop crashes with IndexError: list index out of range and I can't see why.\n\nscores = [88, 92, 75]\nfor i in range(1, len(scores) + 1):\n    print(scores[i])\n\nDon't just give me the corrected code - walk me through how to find the bug myself."
+
     },
     {
       "prompt_id": "tp_002",
