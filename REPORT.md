@@ -32,100 +32,126 @@ Other architectures explored include Test Time Training (TTT), Google Griffin, s
 
 ### Memory Strategy: mmap + mlock Over No-Mmap
 
-The original submission used `--no-mmap` to prevent kernel memory mapping and reduce peak RSS. After further benchmarking, we switched to `--mmap --mlock` for the current architecture:
+The setup using to `--mmap` for the current architecture:
 
-- **`--mmap`**: Memory-maps the GGUF model file into the process address space. The file is read directly from disk into RAM as pages are needed, rather than loading the full model upfront. This reduces cold-start time significantly.
-- **`--mlock`**: Pins all mapped pages into physical RAM, preventing the Linux kernel from ever evicting model weight pages to swap. Once warm, the model is fully resident with zero paging stutter during inference.
-- **`vm.swappiness=5`**: Configured system-wide to strongly prefer reclaiming page cache (including any non-locked file mappings) before touching anonymous pages (KV cache, Python heap). This protects inference latency from swap pressure.
+- **`--mmap`**: Memory-maps the GGUF model file into the process address space. The file is read directly from disk into RAM as pages are needed, rather than loading the full model upfront. This reduces cold-start time significantly and helps better manage memory footprint at the cost of inference speeds.
+- **`vm.swappiness=5`**: Configured system-wide to strongly prefer reclaiming page cache before touching anonymous pages (KV cache, Python heap). This protects inference latency from swap pressure.
 
-This combination delivers faster warmup than `--no-mmap` while achieving the same RAM stability guarantee, with `--mlock` providing stronger protection than `--no-mmap` alone.
+This combination delivers faster warmup and better setup stability at the cost of inference speeds
 
 ### Memory Ceiling: 6 GB Systemd Cgroup Enforcement
 
-The memory ceiling was tightened from 7 GB to **6 GB** via systemd cgroup v2 enforcement:
+The memory ceiling was tightened **6 GB** via systemd cgroup v2 enforcement to prevent out of memory crashes:
 
 ```bash
-systemd-run --scope --user -p MemoryMax=6G -p MemoryHigh=5.7G
+systemd-run --scope --user -p MemoryMax=6G -p MemoryHigh=5.5G
 ```
 
-This applies to the entire orchestrator scope, including the spawned `llama-server` subprocess (both processes share the same `cgroup.procs`). The cgroup `memory.stat` (`anon + file + shmem`) provides the authoritative total, and all memory accounting in `/api/metrics` is derived from this source.
+This applies to the entire orchestrator scope, including the spawned `llama-server` subprocess (both processes share the same `cgroup.procs`) meaning the whole model setup run smoothly within 6gb. The cgroup `memory.stat` (`anon + file + shmem`) provides the total, and all memory accounting in `/api/metrics` is derived from this source.
 
 ### Voice Stack Selection
 
-For speech-to-text, OpenAI Whisper large-v3-turbo was evaluated via `whisper.cpp` but found to be too slow for interactive voice sessions on the target hardware (AMD Ryzen 5 PRO 4650U). The reason is architectural: Whisper uses an **autoregressive encoder-decoder** that generates tokens sequentially, which is inherently higher latency than the **Transducer/CTC-based** approach used by NVIDIA's Parakeet and Nemotron models. Parakeet TDT and Nemotron 3.5 ASR achieve RTFx scores exceeding 3,000× on similar hardware — they process a 3-second utterance in well under 1 second — because they predict all output tokens in a single non-autoregressive pass.
+For speech-to-text, OpenAI Whisper large-v3-turbo was evaluated via `whisper.cpp` but found to be too slow for interactive voice sessions on the target hardware. The reason is architectural: Whisper uses an **autoregressive encoder-decoder** that generates tokens sequentially, which is inherently higher latency than the **Transducer/CTC-based** approach used by NVIDIA's Parakeet and Nemotron models. Parakeet TDT and Nemotron 3.5 ASR achieve RTFx scores exceeding 3,000× on similar hardware — they process a 3-second utterance in well under 1 second — because they predict all output tokens in a single non-autoregressive pass.
 
 Two STT models are used for different interaction modes:
-- **Nemotron 3.5 ASR Streaming (0.6B)** for live interactive voice sessions — transcribes word-by-word in real time
+- **Nemotron 3.5 ASR Streaming (0.6B)** for live interactive voice sessions — transcribes word-by-word in real time (The model is not shipped in this setup).
 - **Parakeet TDT v2 (0.6B)** for push-to-talk voice typing directly into the chat input box
 
 For text-to-speech, `spd-say` was rejected immediately due to robotic voice quality. The LFM Audio vocoder was considered, but **Kokoro v1.0 (ONNX)** was selected for TTS due to its 82 MB footprint, near-real-time CPU inference, and natural-sounding voice output. Kokoro includes an African-cadence voice variant (`af_heart`) that is particularly well suited to this project's target user base.
 
 ### RAG and Intent Routing
 
-A custom ONNX-quantized ColBERT retrieval model (AnswerAI `answerai-colbert-small-v1`) performs late-interaction semantic search over indexed documents — including computer science curricula, code files, and documentation — enabling the tutor to answer questions grounded in materials the student has actually studied, not just generic internet knowledge. Documents under 1,500 words load directly into the context window; larger documents are indexed on-the-fly in approximately 0.25 seconds. The orchestrator routes between **Socratic Tutor**, **Ship Fast Coder**, **RAG Document Query**, and **Auto** modes using ColBERT retrieval confidence scoring combined with lightweight intent pattern matching.
+A custom ONNX-quantized ColBERT retrieval model (AnswerAI `answerai-colbert-small-v1`) performs late-interaction semantic search over indexed documents — including computer science curricula, code files, and documentation(the preindexed embeddings is not included in this setup but any document can be indxed on the fly or preindexed by the user from their study docs before use) — enabling the tutor to answer questions grounded in materials the student has actually studied, not just generic internet knowledge. Documents under 1,500 words load directly into the context window; larger documents are indexed on-the-fly in approximately 0.25 seconds. 
 
+The colbert mode is also used for intent routing so the setup knows when to retrieve knowledge from the pre-indexed embedding as well.
 ---
 
 ## Constraints
 
-The target hardware as specified by the competition is 8 GB RAM, integrated GPU, and Ubuntu 22.04. This matches the typical profile of a budget student or developer laptop in an African context. Code Persona targets pure CPU inference via `llama.cpp` with C/C++ optimized backends.
+The target hardware as specified by the competition is 8 GB RAM, integrated GPU, and Ubuntu 22.04. This matches the typical profile of a budget student or developer laptop in an African context. Code Persona works via CPU or Integrated GPU optimized inference through `llama.cpp`.
 
-The design with a **hard 4 GB systemd cgroup ceiling** (`MemoryMax=4G`) ensures the system operates with significant headroom below the 8 GB physical limit — leaving the remaining ~4 GB free for the OS, desktop environment, browser, and other student applications running alongside it.
+### Why iGPU:
+Integrated GPUs are better and faster than CPUs with far better prompt processing speeds compared to CPU. This means that the users core processing unit is able to focus on handling other user task and processing while the iGPU which the target hardware all have focused on graphics rendering and model inference.
+This is a choice though and users who prefer cpu inference can opt for a CPU build instead(building a cpu 
+llama.cpp build manually rather than through our pre-written script).
+
+### Memory Management
+The design with a **hard 6 GB systemd cgroup ceiling** (`MemoryMax=6G`) ensures the system operates with significant headroom below the 8 GB physical limit — leaving the remaining ~2 GB free aongside side increased swap memory for the OS, desktop environment, browser, and other student applications running alongside it.
 
 Additional real-world constraints that shaped the design:
 - **No stable internet** — all models run fully offline; zero external API calls during inference
-- **Battery and power constraints** — the system uses `--mmap --mlock` and power-clamping techniques via RyzenAdj (22W limit, 83°C thermal ceiling) to limit CPU thermal output and preserve battery life
-- **Broken or inaccessible keyboards** — voice-first design removes the dependency on physical keyboard quality
+- **Battery and power constraints** — the system uses `--mmap --mlock` and power-clamping techniques via RyzenAdj (22W limit, 83°C thermal ceiling) to limit CPU thermal output and preserve battery life. Although I must admit that battery drain would still be quite high under sustained inference.
+- **Broken or inaccessible keyboards** — voice-first design removes the dependency on physical keyboard quality and help users voice type long prompts at better speed than keyboard typing.
 - **System persistence** — `setup_system_permanently.sh` configures `/dev/shm` (4 GB), swap (12 GB), `swappiness=5`, `vm.dirty_ratio=20`, and unlimited `memlock` limits persistently across reboots
 
 ---
 
 ## Benchmarks
 
-Benchmarks vary based on the optimization techniques used. The key optimization targets were the `--mmap --mlock` flags in `llama.cpp` (to use memory-mapped loading while pinning weights into physical RAM) and CPU power clamping via RyzenAdj (to prevent thermal throttling on sustained inference loads).
+Benchmarks vary based on the optimization techniques used. The key optimization targets were the `--mmap --mlock` flags in `llama.cpp` (to use memory-mapped loading while pinning weights into physical RAM), CPU power clamping via RyzenAdj (to prevent thermal throttling on sustained inference loads), increased swap memory, unlimited memlock and vswapiness optimizations. Benchmark results also vary based on cpu capacity, whether cpu or igpu was used, power state of the pc (on battery or plugged in) and most importantly 'RAM speeds and no of ram slots in use'.
+### NOTE:
+- Devices with faster ram speeds and more ram slots in use would have better and faster token generation speeds. My benchmarks hardware contained 1 DDR4 ram stick rated 3200Mhz but with the slots for 2 meaning it could have double token generation speeds if a second stick is inserted.
+- On my device, the iGPU powered by the **AMD Raedon Vega 6 Graphics** delivers over 3x faster processing speeds around  `150t/s` compared to my cpu **AMD Ryzen 5 4650U** with about `60t/s`. However fitting the model fully into ram requires smaller quants or more ram hence the set up only offloads 25 of 40 layers of the model to iGPU alongside increasing iGPU gtt memory allocation to 5096mb (done by the setup script) yielding prompt processing speeds of `110t/s`.
+- CPU core temperature can execeed 85c during benchmarking if the setup script is not ran before benchmarking as this limits power usage by the cpu and iGPU and lowers throttling temperature to 82c. In other words, before benchmarking ensure to run `setup_system_permanently.sh` to replicate my results.
+- Benchmarking while charging increases temperature spike buts with better inference speeds compared to enchmarking when running on battery.
+- Token generation speeds appear to increase when running while charging compared to running on battery and the iGPU is a lot more sensitive to this with token generation speeds incearing from 9t/s to 14t/s once the device is plugged in compared to CPUs from 12 to 14t/s
+
+
 
 We report two sets of numbers:
 
-### 1. Current Architecture (Host Machine — `--mmap --mlock`, Hard 4 GB Cgroup)
+### 1. Current Architecture (Host Machine — `--mmap`, Hard 6 GB Cgroup)
 
-Benchmarking the updated system my personal machine — an **HP EliteBook 845 G7** powered by an **AMD Ryzen 5 PRO 4650U** — under the hard 4 GB systemd cgroup ceiling (`MemoryMax=4G`, `MemoryHigh=3.7G`) with `--mmap --mlock` and 8-bit quantized KV cache:
+Performance metrics otained from running the whole setup on my personal machine — an **HP EliteBook 845 G7** powered by an **AMD Ryzen 5 PRO 4650U** and **AMD Raedon Vega 6 Graphics** and single channel use ram at 3200Mhz speed under the hard 6 GB systemd cgroup ceiling (MemoryMax=6G, MemoryHigh=5.7G) with --mmap and 8-bit quantized KV cache. Prompt Processing speed not reported here as it varies based on length of prompt. WOuld be reported in llama-bench report.
 
-| Component | Resident Memory | Notes |
+| Component | Memory | Token Generation Speeds (CPU|iGPU)(t/s)| Notes |
 | :--- | :--- | :--- |
-| **Granite 4.1 3B** (active) | ~310–380 MB `RssAnon` | Physical heap only; excludes mmap'd file pages |
-| **Qwen 2.5 Coder 3B** (active) | ~310–380 MB `RssAnon` | Physical heap only; excludes mmap'd file pages |
-| **GGUF on Disk** | 1.96 GB | Both models `Q4_K_M` — same size |
-| **KV Cache (Granite, 4k ctx)** | ~128–280 MB | `q8_0` quantized keys and values |
-| **KV Cache (Qwen, 10k ctx)** | ~128–160 MB | 10k context stays under 160 MB with `q8_0` |
-| **llama.cpp Engine** | ~5–30 MB | Thread pools, GGML context buffers |
-| **ColBERT RAG (ONNX)** | ~200 MB | In-process via `acolbert.py` |
-| **Orchestrator (FastAPI)** | ~40–60 MB | Python heap after ColBERT subtraction |
-| **OS Baseline** | ~200–400 MB | Kernel, page tables, filesystem buffers |
-| **Total (cgroup)** | **~1.5–1.7 GB** | Well under the 4 GB `MemoryMax` ceiling |
+| **Granite 4.0 h tiny IQ4_XS**  | 3.49GB |  11 vs 8 |  |Speed drops majorly due to partial gpu offload to manage memory. Full iGPU speed reaches 14t/s |
+| **KV Cache (Granite, 128k ctx)** | ~280 MB | "estimated" `q8_0` kv cache memory overhead. Hybird architecture to thank here. |
+| **llama.cpp Engine** | ~20 MB | Llama server memory overhead |
+| **ColBERT RAG (ONNX)** | ~200 MB | In-process via `acolbert.py` needed for intent routing|
+| **Orchestrator (FastAPI)** | ~50 MB | Fast API server overhead |
+| **OS Baseline** | ~200 MB | OS processes needed to manage the systemd croups |
+| **Vision Model**| ~1.1GB | Not always in RAM, only called via llama-cli for the moment it is needed|
+| **Total (cgroup)** | **~4.2–5.3 GB** | Under the 6 GB `MemoryMax` ceiling |
 
-> [!NOTE]
-> Memory reporting uses **`RssAnon`** (anonymous heap RAM from `/proc/PID/status`) rather than `VmRSS`. `VmRSS` incorrectly includes memory-mapped GGUF file pages and inflates the reading to nearly the full 1.96 GB disk size. `RssAnon` gives an accurate picture of what the process has actually allocated in physical RAM.
 
-### 2. Previous Architecture (Docker — `--no-mmap`, 7.5 GB Cap)
 
-Running the original Granite 4.0 H-Tiny model inside the ADTC Docker container (which enforces a **7.5 GB RAM memory ceiling**, uses `--no-mmap` to disable memory mapping, and clamps CPU load) on the same machine resulted in a peak RAM of **4.16 GB**, a time to first token of **32.72 seconds**, and a generation speed of **9.38 tokens per second**. No thermal throttling was observed, and peak CPU temperatures remained safe at **68.0°C**.
-
-### Performance Metrics Comparison
-
-| Metric | v1 — Granite 4.0 H-Tiny (Docker, `--no-mmap`) | Current — Granite 4.1 3B / Qwen 2.5 Coder 3B |
+### Performance Metrics Comparison on Llama-bench VS the adtc profiler
+This benchmark was ran on my **HP ELitebook 845 G7** with an **AMD Ryzen 5 PRO 4650U** and a **AMD Raedon Vega 6 Graphics** iGPU with 1 ram slot in use and ram seeds of 3200Mhz. The benchmark was ran on **Granite 4.0 h tiny with iQ4_XS** quantization. The benhcmarks were also taken while running on battery not connected to a power source. All CPU runs were done on 6 physical CPU threads.
+| Metric | Granite 4.0 H-Tiny via llama-bench CPU build | Granite 4.0 H-Tiny via llama-bench GPU(-ngl 25) build| Granite 4.0 H-Tiny via adtc-profiler llama-cpp-python(on CPU)
 | :--- | :--- | :--- |
-| **Machine** | HP EliteBook 845 G7 | HP EliteBook 845 G7 |
-| **CPU** | AMD Ryzen 5 PRO 4650U | AMD Ryzen 5 PRO 4650U |
-| **Optimizations** | `--no-mmap` + `--mlock` + 7.5 GB RAM cap | `--mmap` + `--mlock` + **4 GB cgroup ceiling** |
-| **Peak RAM (cgroup total)** | ~4.16 GB (4160.79 MB) | **~1.5–1.7 GB** |
-| **Memory Ceiling** | 7.5 GB | **4 GB** |
-| **Time to First Token** | ~32.72 seconds (cold, `--no-mmap`) | ~3–8 seconds (mmap warm pages) |
-| **Generation Speed** | ~9.38 tokens/sec | ~16–22 t/s (Granite) / ~9–14 t/s (Qwen) |
-| **Context Window** | 4,096 tokens | 4,096 (Granite) / **10,240 (Qwen)** |
-| **Thermal Behavior** | Peak 68.0°C / No Throttling | Peak 68–75°C / No Throttling |
-| **Model Hot-Swap** | Not supported | Dynamic hot-swap (single `llama-server`) |
+| **Peak RAM** | ~3600 MB  | ~3600 MB |  ~3616 MB |
+| **Time to First Token** | not measured | not measured | ~7.1s |
+| **Prompt Processing(pp512)** |  48.94t/s | 107.96t/s | 9.5t/s|
+| **Token Generation (tg128)** | 12.05t/s | 7.13t/s | 8.8t/s|
+| **Thermal Behavior-with ryzenadj power usage and thermal management** | **Peak 87.0°C** | Peak 73°C / No Throttling | Peak 82.0°C / No Throttling|
+| **accuracy (50 arc-easy benchmark)** | not measured | not measured | **0.86** |
 
-> [!NOTE]
-> The `--mmap --mlock` combination recovers the large Time to First Token penalty of `--no-mmap` (~32 s cold start → ~3–8 s), while `--mlock` pins all model weight pages into physical RAM, giving the same swap-safety guarantee. The tightened 4 GB ceiling (down from 7.5 GB) leaves significantly more headroom for the student's OS, browser, and IDE running on the same 8 GB machine.
+### Limitations in Benchmarking
+1. The profiler's own monitoring slows down the speed it measures
+
+While adtc-profiler runs llama-bench, it also runs two background checks at the same time: one that checks memory use every 0.1 seconds, and one that checks CPU temperature every 0.5 seconds. Both of these run as Python threads inside the same process, on the same CPU cores that llama-bench is trying to use.
+
+On a machine with a small number of cores, this is a problem. There's no spare core for the background checks to run on without taking cycles away from llama-bench itself. That competition for CPU time drags down the token generation speed the profiler reports.
+
+We confirmed this by running the exact same model and settings two ways:
+
+Through the profiler: ~9 tokens/sec
+Running llama-bench on cpu build directly, with nothing else running: ~12 tokens/sec
+
+That's roughly a 35% drop, just from the profiler watching itself work.
+
+The idea behind checking memory and temperature while the model is running is correct. Peak memory use and peak temperature only show up under load, so you can't just measure before and after. The issue is how it's done, not whether it should be done. A leaner way to collect this data, for example reading it from the operating system directly instead of polling from inside Python, would avoid the slowdown. As it stands, this is a limitation of the measurement tool, not a mistake in how we set up or ran our model.
+
+2. CPU throttling dependds highly on power management settings and the system itself and surrounding conditions. In as much as our benchmarks using the adtc profiler did not exceed 82c, we are not certain that it would consistent main below it as factors from other background tasks, environmental temperature and employing thermal management are key factors that affect the measurements.
+
+## Estimated Scores
+S_acc: 86x 0.5 = 43
+S_perf: 100 x (8.5/15) = 56.67 x 0.3 = 17
+S_eff: 100 x (7 - 3.49)/7 = 50.14 x 0.2 = 10.03
+
+Total = 70.03
+Thermal throttling penalty situation uncertain, therefore, we would go with a cautios judgement of a worse case scenerio. Estimated total score is 70.03-10 = **60.03**.
 
 *Note: These are self-reported development benchmarks. Official scores are measured by the ADTC profiler on the standard evaluation machine.*
