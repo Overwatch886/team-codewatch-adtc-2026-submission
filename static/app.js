@@ -514,7 +514,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     messages: chatHistory,
                     stream: true,
                     temperature: parseFloat(tempInput.value) || 0.2,
-                    max_tokens: parseInt(tokensInput.value) || 1024
+                    max_tokens: parseInt(tokensInput.value) || 280
                 })
             });
 

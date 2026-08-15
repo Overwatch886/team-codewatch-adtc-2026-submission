@@ -548,6 +548,29 @@ def ask_pipeline(query: str):
     image_paths = extract_image_paths(query, entities)
     text_entities = extract_text_file_entities(entities)
 
+STEP1_GBNF_GRAMMAR = """root ::= step-header "\n\n" explanation "\n\n" task-header "\n" task-body
+step-header ::= "### 🛠️ Step " [0-9]{1,3} ": " [^\n]{1,100}
+explanation ::= [^\n]{1,100}
+task-header ::= "**Your Task**: "
+task-body ::= [^\n]{1,100}
+"""
+
+def ask_pipeline(query: str, image_paths: List[str] = None, enforce_grammar: bool = False):
+    """
+    Standard orchestrator CLI pipeline for testing intent classification, context building,
+    and completion dispatch directly against llama.cpp on port 8081.
+    """
+    if image_paths is None:
+        image_paths = []
+
+    print(f"\n[Orchestrator CLI] Query: '{query}'")
+
+    intent, scores = classify_intent(query)
+    print(f"🎯 Classified Intent: {intent} (scores: {scores})")
+
+    entities = extract_file_paths(query)
+    text_entities = [e for e in entities if not has_image_signal(e)]
+
     if intent == "RAG":
         print("📂 Intent is RAG. Pulling retrieval chunks from ColBERT...")
         prompt_context = build_rag_context(query, entities)
@@ -594,11 +617,15 @@ Instructions:
     target_model = EXPERT_CODE_MODEL if intent == "CODE" else DEFAULT_MENTOR_MODEL
     print(f"🤖 Dispatching request to model target: {target_model}...")
 
-    response = client.chat.completions.create(
-        model=target_model,
-        messages=[{"role": "user", "content": final_prompt}],
-        stream=True
-    )
+    completion_kwargs = {
+        "model": target_model,
+        "messages": [{"role": "user", "content": final_prompt}],
+        "stream": True
+    }
+    if enforce_grammar:
+        completion_kwargs["extra_body"] = {"grammar": STEP1_GBNF_GRAMMAR}
+
+    response = client.chat.completions.create(**completion_kwargs)
 
     for chunk in response:
         if chunk.choices[0].delta.content is not None:
