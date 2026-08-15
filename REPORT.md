@@ -149,9 +149,9 @@ The idea behind checking memory and temperature while the model is running is co
 ## Estimated Scores
 S_acc: 86x 0.5 = 43
 S_perf: 100 x (8.5/15) = 56.67 x 0.3 = 17
-S_eff: 100 x (7 - 3.49)/7 = 50.14 x 0.2 = 10.03
+S_eff: 100 x (7 - 3.53)/7 = 49.57 x 0.2 = 9.91
 
-Total = 70.03
-Thermal throttling penalty situation uncertain, therefore, we would go with a cautios judgement of a worse case scenerio. Estimated total score is 70.03-10 = **60.03**.
+Total = 69.91
+Thermal throttling penalty situation uncertain, therefore, we would go with a cautios judgement of a worse case scenerio. Estimated total score is 69.91-10 = **59.91**.
 
 *Note: These are self-reported development benchmarks. Official scores are measured by the ADTC profiler on the standard evaluation machine.*
