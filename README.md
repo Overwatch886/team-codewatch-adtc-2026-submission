@@ -97,6 +97,14 @@ Tested under **6 GB RAM Memory Ceiling** (`MemoryMax=6G`):
 | **Llama Server Memory Overhead** | Server | **~50 MB** resident |
 | **KV Cache** | `q8_0` Quantized | **~160 MB - 280 MB** |
 
+## Other Uses Cases
+Beyond just being a coding tutor and assistant in our own setup dashboard, code persona can be used from any other software that supports OpenAI compatibe endpoints including VS code for as a live coding tutor and assistant the same way we use Github Copilot for auto-completing, asking questions and agentic tasks! Yes agentic tasks. It can also be used in Browser Extensions like Page Assist to give it access to web search tools or even in agentic frameworks like OpenClaw to give it access to a wider range of tools.
+It can also be connected to tools like Open Interpreter for access to execute commands in your own terminal.
+
+It features two open ai compatible endpoint:
+1. At `http://localhost:8085` which holds our whole model architecture making it a multi modal setup able to accept text, image and document uploads and even audio requests(although audio requests compatibility might require extra setup). Depending on the model style preset in the web dashboard, the model behaviour on the endpoint can be configured to be either a socratic coding tutor or direct a coding assistant. But what if I am not after coding tasks at all. well. . .
+
+2. The endpoint at `http://127.0.0.1:8080`, also open ai compatible, enables you to setup the primary model with your own system prompt for other tasks outside coding. This endpoint primary supports text input and might require bolting on other tools to support other media.
 ---
 
 ## License & Attribution
