@@ -21,7 +21,7 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_step() { echo -e "\n${BLUE}=== [$step/$TOTAL_STEPS] $1 ===${NC}"; step=$((step + 1)); }
 
 step=1
-TOTAL_STEPS=6
+TOTAL_STEPS=7
 
 SUMMARY_CHANGED=()
 SUMMARY_SKIPPED=()
@@ -330,6 +330,28 @@ else
     else
         log_info "RyzenAdj not installed or not in PATH. Skipping."
         add_skipped "RyzenAdj (Not found)"
+    fi
+# --- Step 7: AMD iGPU GTT Memory Allocation (5096 MB) ---
+log_step "Configuring AMD iGPU GTT Memory Allocation (5096 MB)"
+
+if $IS_WSL2; then
+    log_info "Skipping AMD iGPU GTT configuration in WSL2."
+    add_skipped "AMD iGPU GTT (WSL2)"
+else
+    AMDGPU_CONF="/etc/modprobe.d/amdgpu.conf"
+    if [[ -d /sys/module/amdgpu ]]; then
+        log_info "AMD GPU driver detected. Setting GTT buffer size to 5096 MB..."
+        if [[ -f "$AMDGPU_CONF" ]] && grep -q "gttsize=5096" "$AMDGPU_CONF"; then
+            log_info "AMD iGPU GTT size is already set to 5096 MB in $AMDGPU_CONF"
+            add_skipped "AMD iGPU GTT (5096 MB)"
+        else
+            echo "options amdgpu gttsize=5096" > "$AMDGPU_CONF"
+            log_success "Persisted AMD iGPU GTT size (5096 MB) to $AMDGPU_CONF"
+            add_changed "AMD iGPU GTT memory allocation (5096 MB)"
+        fi
+    else
+        log_info "amdgpu module not active. Skipping GTT configuration."
+        add_skipped "AMD iGPU GTT (amdgpu module not active)"
     fi
 fi
 
