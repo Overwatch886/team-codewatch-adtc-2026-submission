@@ -61,7 +61,7 @@ Download the required model weights:
 ./download_model.sh
 ```
 
-### 2. Run System Optimizations (Optional, recommended)
+### 2. Run System Optimizations (Recommended)
 Configure system settings for optimal model performance:
 ```bash
 sudo ./scripts/setup_system_permanently.sh

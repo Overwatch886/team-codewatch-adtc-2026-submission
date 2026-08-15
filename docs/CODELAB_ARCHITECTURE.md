@@ -41,7 +41,7 @@ Both modes are served seamlessly by the same resident Granite 4.0 H-Tiny model. 
   - `vm.dirty_ratio=20`, `vm.dirty_background_ratio=5`
   - Unlimited soft/hard `memlock` limits
   - CPU scaling governor set to `performance` with Transparent HugePages set to `madvise`
-  - RyzenAdj power clamping (22W sustained/fast limit, 82C thermal ceiling)
+  - RyzenAdj power clamping (22W sustained/fast limit, 80C thermal ceiling)
   - AMD iGPU GTT memory allocation set to 5096 MB; Intel iGPU GuC/HuC hardware submission enabled
 
 ---

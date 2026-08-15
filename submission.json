@@ -22,7 +22,7 @@
     "test_prompts": [
       {
         "prompt_id": "tp_001",
-        "prompt": "My loop crashes with IndexError: list index out of range and I can't see why.\n\nscores = [88, 92, 75]\nfor i in range(1, len(scores) + 1):\n    print(scores[i])\n\nDon't just give me the corrected code - walk me through how to find the bug myself."
+        "prompt": "My loop crashes with IndexError: list index out of range and I can't see why.\n\nscores = [88, 92, 75]\nfor i in range(1, len(scores) + 1):\n    print(scores[i])"
       },
       {
         "prompt_id": "tp_002",
@@ -45,15 +45,15 @@
     "os": "Ubuntu 26.04 LTS"
   },
   "throughput": {
-    "tokens_per_second_generation": 8.8,
-    "first_token_latency_ms": 7102.74,
+    "tokens_per_second_generation": 8.57,
+    "first_token_latency_ms": 6103.93,
     "prompt_tokens": 512,
     "generated_tokens": 128
   },
   "memory": {
-    "peak_rss_mb": 3604.71,
-    "steady_state_rss_mb": 3503.4,
-    "peak_vms_mb": 4778.05
+    "peak_rss_mb": 3623.38,
+    "steady_state_rss_mb": 3564.58,
+    "peak_vms_mb": 4778.06
   },
   "accuracy": [
     {
@@ -66,12 +66,12 @@
     }
   ],
   "cpu_thermal": {
-    "cpu_percent_p99": 58.5,
-    "core_temp_c_peak": 82.0,
+    "cpu_percent_p99": 71.4,
+    "core_temp_c_peak": 81.0,
     "throttled": false
   },
   "reproducibility": {
-    "git_commit_sha": "1674312cd8cf",
+    "git_commit_sha": "a63996d4d083",
     "docker_image_digest": "unknown",
     "random_seed": 42
   },

@@ -275,7 +275,7 @@ if [[ -f /sys/devices/system/cpu/amd_pstate/status ]]; then
 fi
 
 if command -v ryzenadj &> /dev/null; then
-    ryzenadj --stapm-limit=22000 --fast-limit=22000 --slow-limit=22000 --tctl-temp=82 2>/dev/null || true
+    ryzenadj --stapm-limit=22000 --fast-limit=22000 --slow-limit=22000 --tctl-temp=80 2>/dev/null || true
 fi
 EOF
     chmod +x "$SERVICE_SCRIPT"
@@ -326,11 +326,11 @@ else
             --stapm-limit=22000 \
             --fast-limit=22000 \
             --slow-limit=22000 \
-            --tctl-temp=82 \
+            --tctl-temp=80 \
             >/dev/null 2>&1; then
-            log_success "RyzenAdj power limits applied (22W, tctl-temp=82°C)."
+            log_success "RyzenAdj power limits applied (22W, tctl-temp=80°C)."
             log_info "RyzenAdj settings are also persisted via llm-sys-tune.service (reapplied on every boot)."
-            add_changed "RyzenAdj limits (22W, 82°C throttle, persistent via systemd)"
+            add_changed "RyzenAdj limits (22W, 80°C throttle, persistent via systemd)"
         else
             log_warn "RyzenAdj failed to apply limits (this is normal on some hardware/kernels)."
             add_skipped "RyzenAdj (failed to apply)"
