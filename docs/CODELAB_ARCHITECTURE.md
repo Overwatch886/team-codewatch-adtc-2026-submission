@@ -48,7 +48,7 @@ Code Persona uses a **single-model architecture** powered by one resident LLM. M
 | **Context Window** | 8,192 tokens | `LLAMA_CTX_SIZE=8192` |
 | **Batch / Micro-Batch** | 2048 / 512 | `LLAMA_BATCH_SIZE=2048`, `LLAMA_UBATCH_SIZE=512` |
 | **KV Cache** | `q8_0` quantized | `-ctk q8_0 -ctv q8_0`, 8-bit quantized context cache to minimize memory overhead under long contexts. |
-| **Memory Load Mode** | `--mmap` | Memory-maps the GGUF model file into the process address space. Pages are loaded from disk into RAM on demand, reducing cold-start time. |
+| **Memory Load Mode** | `--load-mode mmap+mlock` | Memory-maps the GGUF model file into process address space while pinning pages in RAM via `mlock` (auto-detected via `resource.getrlimit(RLIMIT_MEMLOCK)`, falling back to `--load-mode mmap` if restricted). |
 | **Cache RAM** | 64 MB | `LLAMA_CACHE_RAM=64` |
 | **RAG Engine** | **AnswerAI ColBERT** (`model_int8.onnx`) | ONNX-quantized late-interaction semantic search (~200 MB resident). |
 | **Vision Model** | **LFM 2.5 VL 1.6B** (`Q4_0`) | Invoked on demand via `llama-cli` for image description; not permanently resident in RAM (~1.1 GB when active). |

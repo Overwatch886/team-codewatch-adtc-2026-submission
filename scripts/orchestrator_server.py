@@ -862,13 +862,19 @@ def ensure_model_loaded(target_key: str = "granite", force_restart: bool = False
         except Exception:
             can_mlock = False
 
+        load_mode = "mmap+mlock" if can_mlock else "mmap"
+        if can_mlock:
+            print("[Server] Unlimited/large memlock limit detected: Enabling pinned memory-mapped loading (--load-mode mmap+mlock)")
+        else:
+            print("[Server] Restricted memlock limit detected: Falling back to unpinned memory-mapped loading (--load-mode mmap)")
+
         cmd = [
             LLAMA_SERVER_BIN,
             "-m", model_path,
             "-c", llama_ctx, "-b", llama_batch, "-ub", llama_ubatch, "-t", llama_threads,
             "--port", "8081", "--threads-http", llama_http_threads, "--parallel", "1", "--cache-ram", llama_cache_ram,
             "-ctk", llama_ctk, "-ctv", llama_ctv,
-            "--load-mode", "mmap", "-ngl", ngl_flag, "--jinja",
+            "--load-mode", load_mode, "-ngl", ngl_flag, "--jinja",
             "--alias", alias_name,
         ]
 
