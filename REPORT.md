@@ -150,9 +150,9 @@ The idea behind checking memory and temperature while the model is running is co
 2. CPU throttling depends highly on power management settings and the system itself and surrounding conditions. In as much as our benchmarks using the ADTC profiler did not exceed 82C, we are not certain that it would consistently remain below it as factors from other background tasks, environmental temperature and employing thermal management are key factors that affect the measurements.
 
 ## Estimated Scores
-S_acc: 86x 0.5 = 43
-S_perf: 100 x (8.5/15) = 56.67 x 0.3 = 17
-S_eff: 100 x (7 - 3.53)/7 = 49.57 x 0.2 = 9.91
+- S_acc: 86x 0.5 = 43
+- S_perf: 100 x (8.5/15) = 56.67 x 0.3 = 17
+- S_eff: 100 x (7 - 3.53)/7 = 49.57 x 0.2 = 9.91
 
 Total = 69.91
 Thermal throttling penalty situation uncertain, therefore, we would go with a cautious judgement of a worst case scenario. Estimated total score is 69.91-10 = **59.91**.
