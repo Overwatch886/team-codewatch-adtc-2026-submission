@@ -38,7 +38,7 @@ export LLAMA_CTX_SIZE="131072"
 export LLAMA_CTX_SIZE_GRANITE="131072"
 export LLAMA_BATCH_SIZE="2048"
 export LLAMA_UBATCH_SIZE="512"
-export LLAMA_THREADS="4"
+# LLAMA_THREADS is auto-detected by orchestrator_server (half physical cores for GPU, all physical cores for CPU)
 export LLAMA_HTTP_THREADS="2"
 export LLAMA_CACHE_RAM="64"
 export LLAMA_CTK="q8_0"
