@@ -803,24 +803,47 @@ def ensure_model_loaded(target_key: str = "granite", force_restart: bool = False
         model_path = str(next((p for p in possible_paths if p.exists()), possible_paths[0]))
         alias_name = "granite-4.0-h-tiny"
         # Auto-detect GPU build vs pure CPU build capabilities
-        cpu_cores = os.cpu_count() or 4
+        import psutil
+        logical_cores = os.cpu_count() or 4
+        physical_cores = psutil.cpu_count(logical=False) or (logical_cores // 2) or 4
         has_gpu_build = False
-        try:
-            ver_res = subprocess.run([LLAMA_SERVER_BIN, "--version"], capture_output=True, text=True)
-            out_str = (ver_res.stdout + ver_res.stderr).lower()
-            if "vulkan" in out_str or "cuda" in out_str or "rocm" in out_str:
+        server_bin_dir = Path(LLAMA_SERVER_BIN).parent
+
+        # 1. Check for shared libraries in build bin dir (libggml-vulkan.so, libggml-cuda.so, etc.)
+        for lib in server_bin_dir.glob("libggml-*.so*"):
+            lname = lib.name.lower()
+            if any(k in lname for k in ["vulkan", "cuda", "rocm", "clblast", "kompute"]):
                 has_gpu_build = True
-        except Exception:
-            pass
+                break
+
+        # 2. Check dynamic linked libraries using ldd
+        if not has_gpu_build:
+            try:
+                ldd_res = subprocess.run(["ldd", LLAMA_SERVER_BIN], capture_output=True, text=True)
+                out_str = (ldd_res.stdout + ldd_res.stderr).lower()
+                if any(k in out_str for k in ["vulkan", "cuda", "rocm", "nouveau", "nvidia", "hip", "opencl"]):
+                    has_gpu_build = True
+            except Exception:
+                pass
+
+        # 3. Fallback: Check --help or --version output
+        if not has_gpu_build:
+            try:
+                help_res = subprocess.run([LLAMA_SERVER_BIN, "--help"], capture_output=True, text=True)
+                out_str = (help_res.stdout + help_res.stderr).lower()
+                if any(k in out_str for k in ["vulkan", "cuda", "rocm"]):
+                    has_gpu_build = True
+            except Exception:
+                pass
 
         if has_gpu_build:
             ngl_flag = os.getenv("LLAMA_NGL", "25")
-            llama_threads = os.getenv("LLAMA_THREADS", str(max(1, cpu_cores // 2)))
-            print(f"[Server] GPU Offload Build detected: Setting -ngl {ngl_flag}, threads = {llama_threads} (half of {cpu_cores} CPU cores)")
+            llama_threads = os.getenv("LLAMA_THREADS", str(max(1, physical_cores // 2)))
+            print(f"[Server] GPU Offload Build detected: Setting -ngl {ngl_flag}, threads = {llama_threads} (half of {physical_cores} physical CPU cores)")
         else:
             ngl_flag = "0"
-            llama_threads = os.getenv("LLAMA_THREADS", str(cpu_cores))
-            print(f"[Server] Pure CPU Build detected: Setting -ngl 0, threads = {llama_threads} (all {cpu_cores} CPU cores)")
+            llama_threads = os.getenv("LLAMA_THREADS", str(physical_cores))
+            print(f"[Server] Pure CPU Build detected: Setting -ngl 0, threads = {llama_threads} (all {physical_cores} physical CPU cores)")
 
         llama_ctx = os.getenv("LLAMA_CTX_SIZE", os.getenv("LLAMA_CTX_SIZE_GRANITE", "8192"))
         llama_batch = os.getenv("LLAMA_BATCH_SIZE", "2048")
