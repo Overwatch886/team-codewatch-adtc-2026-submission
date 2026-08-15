@@ -95,7 +95,7 @@ The design with a **hard 6 GB systemd cgroup ceiling** (`MemoryMax=6G`) ensures 
 
 Additional real-world constraints that shaped the design:
 - **No stable internet** — all models run fully offline; zero external API calls during inference
-- **Battery and power constraints** — the system uses `--load-mode mmap+mlock` (with `--load-mode mmap` fallback) and power-clamping techniques via RyzenAdj (22W limit, 83°C thermal ceiling) to limit CPU thermal output and preserve battery life. Although I must admit that battery drain would still be quite high under sustained inference.
+- **Battery and power constraints** — the system uses `--load-mode mmap+mlock` (with `--load-mode mmap` fallback) and power-clamping techniques via RyzenAdj (22W limit, 80°C thermal ceiling) to limit CPU thermal output and preserve battery life. Although I must admit that battery drain would still be quite high under sustained inference.
 - **Broken or inaccessible keyboards** — voice-first design removes the dependency on physical keyboard quality and helps users voice type long prompts at better speed than keyboard typing.
 - **System persistence** — `setup_system_permanently.sh` configures `/dev/shm` (4 GB), swap (12 GB), `swappiness=5`, `vm.dirty_ratio=20`, and unlimited `memlock` limits persistently across reboots
 
@@ -108,7 +108,7 @@ Benchmarks vary based on the optimization techniques used. The key optimization 
 > **NOTE:**
 > - Devices with faster RAM speeds and more RAM slots in use would have better and faster token generation speeds. My benchmark hardware contained 1 DDR4 RAM stick rated 3200MHz but with the slots for 2 meaning it could have double token generation speeds if a second stick is inserted.
 > - On my device, the iGPU powered by the **AMD Radeon Vega 6 Graphics** delivers over 3x faster processing speeds around `150t/s` compared to my CPU **AMD Ryzen 5 4650U** with about `60t/s`. However fitting the model fully into RAM requires smaller quants or more RAM hence the setup only offloads 25 of 40 layers of the model to iGPU alongside increasing iGPU GTT memory allocation to 5096 MB (done by the setup script) yielding prompt processing speeds of `110t/s`.
-> - CPU core temperature can exceed 85C during benchmarking if the setup script is not run before benchmarking as this limits power usage by the CPU and iGPU and lowers throttling temperature to 82C. In other words, before benchmarking ensure to run `setup_system_permanently.sh` to replicate my results.
+> - CPU core temperature can exceed 85C during benchmarking if the setup script is not run before benchmarking as this limits power usage by the CPU and iGPU and lowers throttling temperature to 80C. In other words, before benchmarking ensure to run `setup_system_permanently.sh` to replicate my results.
 > - Benchmarking while charging increases temperature spikes but with better inference speeds compared to benchmarking when running on battery.
 > - Token generation speeds appear to increase when running while charging compared to running on battery and the iGPU is a lot more sensitive to this with token generation speeds increasing from 9t/s to 14t/s once the device is plugged in compared to CPUs from 12 to 14t/s.
 
@@ -158,7 +158,7 @@ That's roughly a 35% drop, just from the profiler watching itself work.
 
 The idea behind checking memory and temperature while the model is running is correct. Peak memory use and peak temperature only show up under load, so you can't just measure before and after. The issue is how it's done, not whether it should be done. A leaner way to collect this data, for example reading it from the operating system directly instead of polling from inside Python, would avoid the slowdown. As it stands, this is a limitation of the measurement tool, not a mistake in how we set up or ran our model.
 
-2. **CPU throttling depends highly on power management settings and the system itself and surrounding conditions.** In as much as our benchmarks using the ADTC profiler did not exceed 82C, we are not certain that it would consistently remain below it as factors from other background tasks, environmental temperature and employing thermal management are key factors that affect the measurements.
+2. **CPU throttling depends highly on power management settings and the system itself and surrounding conditions.** In as much as our benchmarks using the ADTC profiler did not exceed 80C, we are not certain that it would consistently remain below it as factors from other background tasks, environmental temperature and employing thermal management are key factors that affect the measurements.
 
 3. **The target hardware spec is missing two important details.**
 
