@@ -40,12 +40,12 @@ The original submission used `--no-mmap` to prevent kernel memory mapping and re
 
 This combination delivers faster warmup than `--no-mmap` while achieving the same RAM stability guarantee, with `--mlock` providing stronger protection than `--no-mmap` alone.
 
-### Memory Ceiling: 4 GB Systemd Cgroup Enforcement
+### Memory Ceiling: 6 GB Systemd Cgroup Enforcement
 
-The memory ceiling was tightened from 7.5 GB to **4 GB** via systemd cgroup v2 enforcement:
+The memory ceiling was tightened from 7 GB to **6 GB** via systemd cgroup v2 enforcement:
 
 ```bash
-systemd-run --scope --user -p MemoryMax=4G -p MemoryHigh=3.7G
+systemd-run --scope --user -p MemoryMax=6G -p MemoryHigh=5.7G
 ```
 
 This applies to the entire orchestrator scope, including the spawned `llama-server` subprocess (both processes share the same `cgroup.procs`). The cgroup `memory.stat` (`anon + file + shmem`) provides the authoritative total, and all memory accounting in `/api/metrics` is derived from this source.
