@@ -26,11 +26,11 @@ We also explored the LFM models powered by Liquid AI. These models are purpose-m
 
 Through extensive benchmarking across Granite 4.0 H micro, Granite 4.0 H tiny, Granite 4.1 3B, Granite 3.1 3b A800M, Qwen 2.5 3b Coder, Gemma and Nvidia Nemotron models. We arrived at a **single-model architecture** powered by **Granite 4.0 H Tiny Q4_K_S** (`granite-4.0-h-tiny.i1-IQ4_XS.gguf`). Granite 4.0 H Tiny delivers exceptional code understanding and reasoning as well as tool calling while fitting within memory constraints when configured. It required careful tuning for optimal performance under memory constraints compared to the other granite and qwen model. Despite this, granite 4.0 h tiny stood out due to its exception coding perfromance and tool calling abilities with better inference speeds due to its MoE architecture. Both Socratic Tutor Mode and Build & Ship Fast Mode are served seamlessly by this single resident model via dynamic system-prompt persona switching, eliminating background model-swapping overhead.
 
-A different setup was actually built in the feature/dual-model-setup branch in this repo which uses a dual model architecture but this setup was not choosen because of better generation speeds and model swapping lateency. That setup though is more memory efficient and functions smoothly under a 4g ram systemd cgroups memory limit.
+A different setup was actually built in the feature/dual-model-setup branch in this repo which uses a dual model architecture but this setup was not choosen because of better generation speeds and model swapping lateency. That setup though is more memory efficient and functions smoothly under a 6g ram systemd cgroups memory limit.
 
 Other architectures explored include Test Time Training (TTT), Google Griffin, subquadratic state spaces, and Liquid Neural Networks — but most were not yet deployable through `llama.cpp` at the time of building.
 
-### Memory Strategy: mmap + mlock Over No-Mmap
+### Memory Strategy: 
 
 The setup using to `--mmap` for the current architecture:
 
