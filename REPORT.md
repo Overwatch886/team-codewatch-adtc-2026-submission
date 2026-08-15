@@ -10,7 +10,7 @@
 
 For every computer science student, the crowded lecture hall and limited practical equipments always leave the student unfulfilled after every lecture. There is always a need to understand more and practicalize what they have learnt. LLMS are usually the next options in the mind of students, until they visit the LLM site and oops, poor internet connection becomes the next hindrance. Professor Lowacode is here to solve that by bring the tutoring capabilities of cloud LLMs on device for them serving as  home tutors on device for coding tasks and concepts.
 
-Code Persona is an offline system that orchestrates specialized local models for speech transcription, intent routing, document retrieval, code reasoning, and spoken response generation — powered by a single resident **Granite 4.0 H Tiny Q4_K_S** model (`-ngl 25` GPU offload) running within a strict **4 GB systemd cgroup ceiling**, operating fully offline.
+Code Persona is an offline system that orchestrates specialized local models for speech transcription, intent routing, document retrieval, code reasoning, and spoken response generation — powered by a single resident **Granite 4.0 H Tiny iQ4_K_S** (also known as Professor Lowacode) modelrunning within a strict **6 GB systemd cgroup ceiling**, operating fully offline.
 
 ---
 
@@ -18,13 +18,15 @@ Code Persona is an offline system that orchestrates specialized local models for
 
 ### Core LLM Selection
 
-Many model architectures were reviewed in choosing the engine of Code Persona. New architectures that do not require high CPU overhead or high RAM usage under long context windows were specifically explored.
+Many model architectures were reviewed in choosing the engine of Code Persona. Efficient architectures that do not require high CPU overhead or high RAM usage under long context windows were specifically explored.
 
-We first explored one-bit ternary modules, majorly Prism LM Ternary Bonsai models and Microsoft BitNet models. We immediately targeted Q4_K_M quantization as it balances both performance and accuracy. But the ternary Bonsai and BitNet modules suffered high RAM usage on long context windows due to their transformer-based architecture — context window growth was quadratic, restricting workflows to short-context use cases only.
+We first explored one-bit ternary models, primarily Prism LM Ternary Bonsai models and Microsoft BitNet models. We immediately targeted Q4_K_M quantization as it balances both performance and accuracy. But the ternary Bonsai and BitNet modules were not good enough for our coding needs or needed long thinking sessions to achieve optimal performance
 
-We also explored the LFM models powered by Liquid AI. These models are purpose-made for edge hardware with blazing fast inference speeds of 10 tokens/sec and above. However, Liquid AI specifically do not recommend LFM modules for code-related tasks due to their architecture. So the LFM models, despite their speed, could not serve as Code Persona's reasoning brain.
+We also explored the LFM models powered by Liquid AI. These models are purpose-made for edge hardware with blazing fast inference speeds of 20 tokens/sec and above. However, Liquid AI specifically do not recommend LFM modules for code-related tasks due to their architecture. So the LFM models, despite their speed, could not serve as Code Persona's reasoning brain.
 
-Through extensive benchmarking across Granite 4.0 H micro, Granite 4.0 H tiny, Granite 4.1 3B, Qwen 2.5 Coder, and Gemma models, we arrived at a **single-model architecture** powered by **Granite 4.0 H Tiny Q4_K_S** (`granite-4.0-h-tiny.i1-IQ4_XS.gguf`). Granite 4.0 H Tiny delivers exceptional code understanding and reasoning while fitting comfortably within memory constraints when configured with `-ngl 25` layer offloading. Both Socratic Tutor Mode and Build & Ship Fast Mode are served seamlessly by this single resident model via dynamic system-prompt persona switching, eliminating background model-swapping overhead.
+Through extensive benchmarking across Granite 4.0 H micro, Granite 4.0 H tiny, Granite 4.1 3B, Granite 3.1 3b A800M, Qwen 2.5 3b Coder, Gemma and Nvidia M=Nemotron models. We arrived at a **single-model architecture** powered by **Granite 4.0 H Tiny Q4_K_S** (`granite-4.0-h-tiny.i1-IQ4_XS.gguf`). Granite 4.0 H Tiny delivers exceptional code understanding and reasoning as well as tool calling while fitting within memory constraints when configured. It required careful tuning for optimal performance under memory constraints compared to the other granite and qwen model. Despite this, granite 4.0 h tiny stood out due to its exception coding perfromance and tool calling abilities with better inference speeds due to its MoE architecture. Both Socratic Tutor Mode and Build & Ship Fast Mode are served seamlessly by this single resident model via dynamic system-prompt persona switching, eliminating background model-swapping overhead.
+
+A different setup was actually built in the feature/dual-model-setup branch in this repo which uses a dual model architecture but this setup was not choosen because of better generation speeds and model swapping lateency. That setup though is more memory efficient and functions smoothly under a 4g ram systemd cgroups memory limit.
 
 Other architectures explored include Test Time Training (TTT), Google Griffin, subquadratic state spaces, and Liquid Neural Networks — but most were not yet deployable through `llama.cpp` at the time of building.
 
