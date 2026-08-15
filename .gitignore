@@ -19,7 +19,6 @@ scripts/colbert_index/
 outputs/
 
 # ── Competition evaluation outputs ────────────────────────────────────────────
-submission.json
 audit.json
 verdict.json
 scratch_eval_results.json

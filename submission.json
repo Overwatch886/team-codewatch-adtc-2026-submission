@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.1.0",
+  "profiler_version": "adtc-profiler 0.1.0",
+  "submission": {
+    "team_id": "code-persona",
+    "domain": "coding_assistants",
+    "language_scope": [
+      "en"
+    ],
+    "african_alpha_claim": false,
+    "budget_laptop_claim": true,
+    "submitter": {
+      "name": "Israel Olawuyi",
+      "email": "olawuyiisrael42@gmail.com",
+      "github_handle": "Overwatch886"
+    },
+    "cross_disciplinary_pairing": {
+      "discipline": "education",
+      "load_bearing": true,
+      "description": "Despite being majorly a coding assistant, this project can also help both students and educators review course materials and study them as well as extract key details from them through its rag agentic system which helps extract key details in bulky materials simplifying the study process for students and simplifying the process of creating lecture materials from other sources for educators."
+    },
+    "test_prompts": [
+      {
+        "prompt_id": "tp_001",
+        "prompt": "Explain how to reverse a linked list."
+      },
+      {
+        "prompt_id": "tp_002",
+        "prompt": "I don't understand the OOP concepts of inheritance and polymorphism, can you break it down for me?"
+      }
+    ],
+    "model": {
+      "name": "granite-4.0-h-tiny",
+      "runtime": "llama.cpp",
+      "quantization": "GGUF IQ4_XS",
+      "parameters_estimate": "6.94B",
+      "packaging": "binary_bundle"
+    }
+  },
+  "environment": {
+    "measured_on": "participant_laptop",
+    "cpu_model": "AMD Ryzen 5 PRO 4650U with Radeon Graphics",
+    "ram_gb": 6.8,
+    "gpu": "none",
+    "os": "Ubuntu 26.04 LTS"
+  },
+  "throughput": {
+    "tokens_per_second_generation": 8.8,
+    "first_token_latency_ms": 7102.74,
+    "prompt_tokens": 512,
+    "generated_tokens": 128
+  },
+  "memory": {
+    "peak_rss_mb": 3604.71,
+    "steady_state_rss_mb": 3503.4,
+    "peak_vms_mb": 4778.05
+  },
+  "accuracy": [
+    {
+      "benchmark": "arc_easy",
+      "dataset_version": "lm-eval-harness",
+      "language": "en",
+      "samples": 50,
+      "score": 0.86,
+      "metric": "acc_norm"
+    }
+  ],
+  "cpu_thermal": {
+    "cpu_percent_p99": 58.5,
+    "core_temp_c_peak": 82.0,
+    "throttled": false
+  },
+  "reproducibility": {
+    "git_commit_sha": "1674312cd8cf",
+    "docker_image_digest": "unknown",
+    "random_seed": 42
+  },
+  "model_info": {
+    "params_count": 6939037248,
+    "context_length": 1048576,
+    "architecture": "granitehybrid",
+    "claimed_params_estimate": "6.94B",
+    "params_match": true
+  }
+}
