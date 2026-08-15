@@ -233,10 +233,11 @@ if [ -f "$WORKSPACE_DIR/download_models.sh" ]; then
 fi
 print_success "Model verification & downloading complete."
 
-# [9/11] Fix hardcoded paths across scripts
-print_step 9 "Fixing workspace paths in Python and Shell scripts..."
+# [9/11] Legacy safety net: fix any remaining hardcoded paths across scripts
+# NOTE: Python files now compute paths relative to __file__, so this should be a no-op.
+print_step 9 "Fixing any remaining workspace paths in Python and Shell scripts..."
 find "$WORKSPACE_DIR" -type f \( -name "*.py" -o -name "*.sh" \) ! -path "*/venv/*" ! -path "*/software/*" -exec sed -i "s|/home/overwatch886/local_ai_workspace/code-persona-adtc-2026-submission|$WORKSPACE_DIR|g" {} + 2>/dev/null || true
-print_success "Workspace paths updated."
+print_success "Workspace paths checked."
 
 # [10/11] Create start.sh and make scripts executable
 print_step 10 "Creating start.sh and setting permissions..."

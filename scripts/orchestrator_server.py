@@ -1376,14 +1376,12 @@ async def audio_speech(request: Request):
 possible_parakeet_bins = [
     str(Path(__file__).resolve().parent.parent / "software" / "parakeet.cpp" / "build" / "examples" / "cli" / "parakeet-cli"),
     str(Path(__file__).resolve().parent.parent.parent / "software" / "parakeet.cpp" / "build" / "examples" / "cli" / "parakeet-cli"),
-    "/home/overwatch886/local_ai_workspace/software/parakeet.cpp/build/examples/cli/parakeet-cli",
 ]
 PARAKEET_BIN = next((p for p in possible_parakeet_bins if os.path.exists(p)), possible_parakeet_bins[0])
 
 possible_parakeet_models = [
     str(Path(__file__).resolve().parent.parent / "model" / "audio" / "tdt-0.6b-v2-q5_k.gguf"),
     str(Path(__file__).resolve().parent.parent.parent / "model" / "audio" / "tdt-0.6b-v2-q5_k.gguf"),
-    "/home/overwatch886/local_ai_workspace/model/audio/tdt-0.6b-v2-q5_k.gguf",
 ]
 PARAKEET_MODEL = next((p for p in possible_parakeet_models if os.path.exists(p)), possible_parakeet_models[0])
 
