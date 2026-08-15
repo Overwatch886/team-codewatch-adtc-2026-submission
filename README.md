@@ -1,8 +1,8 @@
-# Professor Lowacode -- Offline Coding Tutor and Assistant
+# Code Persona -- Offline Coding Tutor and Assistant
 
 > **Africa Deep Tech Challenge 2026 Submission** | **Track:** `coding_assistants` | **Team:** `code-persona`
 
-Professor Lowacode is a 100% offline AI Pair Programmer and Socratic Coding Tutor built to run on 8 GB RAM systems with only CPUs and integrated graphics.
+Code Persona is a 100% offline AI Pair Programmer and Socratic Coding Tutor built to run on 8 GB RAM systems with only CPUs and integrated graphics.
 
 ---
 
@@ -69,12 +69,23 @@ sudo ./scripts/setup_system_permanently.sh
 
 ### 3. Automated Installation
 Install the required software on native Linux (Ubuntu, Debian, Fedora, Arch) or through Windows WSL2 (must have been set up previously):
+## To install WSL on Windows
+Run this command with powershell running as administrator
+```powershell
+wsl --install -d Ubuntu-22.04
+```
+After installation, reboot your system, open the wsl/ubuntu 22.04 icon in start and then setup username and passsword.
+
+**Linux users can start from here (WSL not needed)**
+> Note that the installation would use up about 6-7GB while downloading so have it prepared
+
+Now open the wsl terminal and run this command to install required scripts and model weights:
 ```bash
 ./install.sh
 ```
 
 ### 4. Launch Service Under Hard RAM Cap
-Start the orchestrator server using the canonical launcher:
+After installation finishes successfully, start the orchestrator server using this command:
 ```bash
 ./start.sh
 ```
