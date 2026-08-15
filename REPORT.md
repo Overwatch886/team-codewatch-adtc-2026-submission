@@ -104,7 +104,7 @@ We report two sets of numbers:
 
 Performance metrics otained from running the whole setup on my personal machine — an **HP EliteBook 845 G7** powered by an **AMD Ryzen 5 PRO 4650U** and **AMD Raedon Vega 6 Graphics** and single channel use ram at 3200Mhz speed under the hard 6 GB systemd cgroup ceiling (MemoryMax=6G, MemoryHigh=5.7G) with --mmap and 8-bit quantized KV cache. Prompt Processing speed not reported here as it varies based on length of prompt. WOuld be reported in llama-bench report.
 
-| Component | Memory | Token Generation Speeds (CPU|iGPU)(t/s)| Notes |
+| Component | Memory | Token Generation Speeds (CPU/iGPU)(t/s)| Notes |
 | :--- | :--- | :--- |
 | **Granite 4.0 h tiny IQ4_XS**  | 3.49GB |  11 vs 8 |  |Speed drops majorly due to partial gpu offload to manage memory. Full iGPU speed reaches 14t/s |
 | **KV Cache (Granite, 128k ctx)** | ~280 MB | "estimated" `q8_0` kv cache memory overhead. Hybird architecture to thank here. |
@@ -119,7 +119,7 @@ Performance metrics otained from running the whole setup on my personal machine 
 
 ### Performance Metrics Comparison on Llama-bench VS the adtc profiler
 This benchmark was ran on my **HP ELitebook 845 G7** with an **AMD Ryzen 5 PRO 4650U** and a **AMD Raedon Vega 6 Graphics** iGPU with 1 ram slot in use and ram seeds of 3200Mhz. The benchmark was ran on **Granite 4.0 h tiny with iQ4_XS** quantization. The benhcmarks were also taken while running on battery not connected to a power source. All CPU runs were done on 6 physical CPU threads.
-| Metric | Granite 4.0 H-Tiny via llama-bench CPU build | Granite 4.0 H-Tiny via llama-bench GPU(-ngl 25) build| Granite 4.0 H-Tiny via adtc-profiler llama-cpp-python(on CPU)
+| Metric | Granite 4.0 H-Tiny via llama-bench CPU build | Granite 4.0 H-Tiny via llama-bench GPU(-ngl 25) build| Granite 4.0 H-Tiny via adtc-profiler llama-cpp-python(on CPU)|
 | :--- | :--- | :--- |
 | **Peak RAM** | ~3600 MB  | ~3600 MB |  ~3616 MB |
 | **Time to First Token** | not measured | not measured | ~7.1s |
