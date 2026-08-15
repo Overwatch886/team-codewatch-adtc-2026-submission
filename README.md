@@ -74,18 +74,18 @@ Run this command with powershell running as administrator
 ```powershell
 wsl --install -d Ubuntu-22.04
 ```
-After installation, reboot your system and then setup username and passsword.
+After installation, reboot your system, open the wsl/ubuntu 22.04 icon in start and then setup username and passsword.
 
 **Linux users can start from here (WSL not needed)**
 > Note that the installation would use up about 6-7GB while downloading so have it prepared
 
-Now run this command to install required scripts and model weights:
+Now open the wsl terminal and run this command to install required scripts and model weights:
 ```bash
 ./install.sh
 ```
 
 ### 4. Launch Service Under Hard RAM Cap
-Start the orchestrator server using the canonical launcher:
+After installation finishes successfully, start the orchestrator server using the canonical launcher:
 ```bash
 ./start.sh
 ```
