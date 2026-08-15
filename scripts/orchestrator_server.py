@@ -972,11 +972,11 @@ EXPERT_DEVELOPER_SYSTEM_PROMPT = """You are an expert software engineer and dire
 2. Execute tool calls and answer questions directly without Socratic restrictions.
 3. Be concise, precise, and practical."""
 
-STEP1_GBNF_GRAMMAR = """root ::= step1-header "\n\n" explanation "\n\n" task-header "\n" task-body
-step1-header ::= "### ️ Step 1: " [^\n]{1,100}
-explanation ::= [^\n]{1,300}
+STEP1_GBNF_GRAMMAR = """root ::= step-header "\n\n" explanation "\n\n" task-header "\n" task-body
+step-header ::= "### 🛠️ Step " [0-9]{1,3} ": " [^\n]{1,100}
+explanation ::= [^\n]{1,100}
 task-header ::= "**Your Task**: "
-task-body ::= [^\n]{1,300}
+task-body ::= [^\n]{1,100}
 """
 
 @app.post("/v1/chat/completions")
@@ -1160,7 +1160,7 @@ async def chat_completions(request: Request):
         if isinstance(stop_sequences, str):
             stop_sequences = [stop_sequences]
 
-        max_toks = int(body.get("max_tokens", 1024))
+        max_toks = int(body.get("max_tokens", 280))
         
         call_args = {
             "model": model_name,
@@ -1181,9 +1181,11 @@ async def chat_completions(request: Request):
         if intent == "CODE" and "tools" in body:
             print("[Server] Intent is CODE. Setting tool_choice to 'required' to guarantee tool utilization.")
             call_args["tool_choice"] = "required"
-        elif "tool_choice" in body:
-            call_args["tool_choice"] = body["tool_choice"]
-        if "response_format" in body:
+        if "grammar" in body:
+            call_args["grammar"] = body["grammar"]
+        elif body.get("use_grammar") or body.get("enforce_grammar"):
+            call_args["grammar"] = STEP1_GBNF_GRAMMAR
+        elif "response_format" in body:
             call_args["response_format"] = body["response_format"]
 
         try:

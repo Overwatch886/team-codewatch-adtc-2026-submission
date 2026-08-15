@@ -12,6 +12,14 @@ Code Persona provides two specialized, interactive pair-programming workflows dr
 
 - **Purpose**: Interactive coding mentorship that guides the student toward understanding rather than handing them answers.
 - **Behavior**: Enforces the Professor LowaCode persona with a strict multi-step progression mandate (`Step N: [Focus]`), delivering a single step per turn with guiding questions and zero direct code block disclosures, forcing the user to write their own code before moving forward.
+- **GBNF Grammar Restriction**: Utilizes a custom GBNF grammar (`STEP1_GBNF_GRAMMAR`) to constrain generated output into structured step headers, concise explanations, and explicit task sections, preventing formatting drift:
+  ```bnf
+  root ::= step-header "\n\n" explanation "\n\n" task-header "\n" task-body
+  step-header ::= "### 🛠️ Step " [0-9]{1,3} ": " [^\n]{1,100}
+  explanation ::= [^\n]{1,100}
+  task-header ::= "**Your Task**: "
+  task-body ::= [^\n]{1,100}
+  ```
 
 ### 2. Build and Ship Fast Mode
 
@@ -174,7 +182,7 @@ If the `llama-server` process on port 8081 crashes or becomes unresponsive, the 
 The web dashboard at `http://localhost:8085` provides a full-featured interface:
 
 ### Sidebar
-- **Settings Panel**: Session mode selector (Socratic Study vs Fast Ship), temperature control (default 0.2), max tokens (default 2048), text-to-speech toggle.
+- **Settings Panel**: Session mode selector (Socratic Study vs Fast Ship), temperature control (default 0.2), max tokens (default 280), text-to-speech toggle.
 - **System Metrics Panel**: Real-time RAM progress bar with percentage and used/total GB, expandable memory breakdown card showing per-component allocation (OS Baseline, Active Model, llama.cpp Engine, Prompt Cache, Vision Engine, ColBERT, Kokoro TTS, Orchestrator, Total Allocated), manual refresh button, and service status indicator. Metrics auto-poll every 8 seconds.
 
 ### Chat Area
