@@ -85,7 +85,7 @@ Now open the wsl terminal and run this command to install required scripts and m
 ```
 
 ### 4. Launch Service Under Hard RAM Cap
-After installation finishes successfully, start the orchestrator server using the canonical launcher:
+After installation finishes successfully, start the orchestrator server using this command:
 ```bash
 ./start.sh
 ```
