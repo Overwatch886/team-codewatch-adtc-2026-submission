@@ -78,6 +78,7 @@ After installation, reboot your system and then setup username and passsword.
 
 **Linux users can start from here (WSL not needed)**
 > Note that the installation would use up about 6-7GB while downloading so have it prepared
+
 Now run this command to install required scripts and model weights:
 ```bash
 ./install.sh
