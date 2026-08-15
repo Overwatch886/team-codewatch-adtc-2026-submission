@@ -4,9 +4,10 @@ import subprocess
 import json
 import sys
 from typing import Dict, List, Tuple
+from pathlib import Path
 
-# Ensure workspace is in python path to import acolbert
-WORKSPACE_DIR = "/home/overwatch886/local_ai_workspace"
+# Compute workspace (repo root) relative to this file: scripts/ -> repo root
+WORKSPACE_DIR = str(Path(__file__).resolve().parent.parent)
 if WORKSPACE_DIR not in sys.path:
     sys.path.append(WORKSPACE_DIR)
 
@@ -23,17 +24,19 @@ CHAT_MODEL = os.getenv("LITELLM_CHAT_MODEL", DEFAULT_MENTOR_MODEL)
 IMAGE_EXTENSION_PATTERN = re.compile(r"\.(png|jpe?g|webp|bmp|gif|tiff?)\b", re.IGNORECASE)
 IMAGE_WORD_PATTERN = re.compile(r"\b(image|photo|picture|screenshot|diagram)\b", re.IGNORECASE)
 
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+
 LLAMA_CLI_BIN = os.getenv(
     "LLAMA_CLI_BIN",
-    "/home/overwatch886/local_ai_workspace/software/llama.cpp/build/bin/llama-cli"
+    str(_REPO_ROOT / "software" / "llama.cpp" / "build" / "bin" / "llama-cli")
 )
 VISION_MODEL_PATH = os.getenv(
     "VISION_MODEL_PATH",
-    "/home/overwatch886/local_ai_workspace/models/lnn/vision/LFM2.5-VL-1.6B-Q4_0.gguf"
+    str(_REPO_ROOT / "model" / "vision" / "LFM2.5-VL-1.6B-Q4_0.gguf")
 )
 VISION_MMPROJ_PATH = os.getenv(
     "VISION_MMPROJ_PATH",
-    "/home/overwatch886/local_ai_workspace/models/lnn/vision/mmproj-LFM2.5-VL-1.6b-Q8_0.gguf"
+    str(_REPO_ROOT / "model" / "vision" / "mmproj-LFM2.5-VL-1.6b-Q8_0.gguf")
 )
 VISION_CTX = int(os.getenv("VISION_CTX", "2048"))
 VISION_THREADS = int(os.getenv("VISION_THREADS", "4"))

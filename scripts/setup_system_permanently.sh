@@ -21,7 +21,7 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_step() { echo -e "\n${BLUE}=== [$step/$TOTAL_STEPS] $1 ===${NC}"; step=$((step + 1)); }
 
 step=1
-TOTAL_STEPS=6
+TOTAL_STEPS=7
 
 SUMMARY_CHANGED=()
 SUMMARY_SKIPPED=()
@@ -244,30 +244,38 @@ else
     SERVICE_FILE="/etc/systemd/system/llm-sys-tune.service"
     SERVICE_SCRIPT="/usr/local/bin/llm-sys-tune.sh"
     
-    # Create the tuning script
+    # Create the universal CPU tuning script
     cat > "$SERVICE_SCRIPT" <<'EOF'
 #!/usr/bin/env bash
-# Set THP to madvise
+# 1. Set THP to madvise
 if [[ -f /sys/kernel/mm/transparent_hugepage/enabled ]]; then
     echo madvise > /sys/kernel/mm/transparent_hugepage/enabled
 fi
 
-# Set CPU governor to performance
+# 2. Universal Linux cpufreq scaling governor -> performance (Intel & AMD)
 for governor in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
     if [[ -f "$governor" ]]; then
-        echo performance > "$governor"
+        echo performance > "$governor" 2>/dev/null || true
     fi
 done
 
-# Apply RyzenAdj power limits (22W, 82°C throttle)
-# These settings do not survive reboot, so they must be reapplied on every boot
+# 3. Universal power-profiles-daemon profile -> performance (Intel & AMD)
+if command -v powerprofilesctl &>/dev/null; then
+    powerprofilesctl set performance 2>/dev/null || true
+fi
+
+# 4. Intel CPU Specific Turbo Boost (intel_pstate)
+if [[ -f /sys/devices/system/cpu/intel_pstate/no_turbo ]]; then
+    echo 0 > /sys/devices/system/cpu/intel_pstate/no_turbo 2>/dev/null || true
+fi
+
+# 5. AMD CPU Specific Boost (amd_pstate / ryzenadj)
+if [[ -f /sys/devices/system/cpu/amd_pstate/status ]]; then
+    echo active > /sys/devices/system/cpu/amd_pstate/status 2>/dev/null || true
+fi
+
 if command -v ryzenadj &> /dev/null; then
-    ryzenadj \
-        --stapm-limit=22000 \
-        --fast-limit=22000 \
-        --slow-limit=22000 \
-        --tctl-temp=82 \
-        2>/dev/null || true
+    ryzenadj --stapm-limit=22000 --fast-limit=22000 --slow-limit=22000 --tctl-temp=82 2>/dev/null || true
 fi
 EOF
     chmod +x "$SERVICE_SCRIPT"
@@ -330,6 +338,45 @@ else
     else
         log_info "RyzenAdj not installed or not in PATH. Skipping."
         add_skipped "RyzenAdj (Not found)"
+    fi
+# --- Step 7: iGPU VRAM & GTT Memory Allocation (Intel & AMD 5096 MB) ---
+log_step "Configuring iGPU VRAM & GTT Memory Allocation (5096 MB)"
+
+if $IS_WSL2; then
+    log_info "Skipping iGPU GTT configuration in WSL2."
+    add_skipped "iGPU GTT (WSL2)"
+else
+    # 1. AMD APU GTT Allocation (5096 MB)
+    if [[ -d /sys/module/amdgpu ]]; then
+        AMDGPU_CONF="/etc/modprobe.d/amdgpu.conf"
+        log_info "AMD GPU driver detected. Setting GTT buffer size to 5096 MB..."
+        if [[ -f "$AMDGPU_CONF" ]] && grep -q "gttsize=5096" "$AMDGPU_CONF"; then
+            log_info "AMD iGPU GTT size is already set to 5096 MB in $AMDGPU_CONF"
+            add_skipped "AMD iGPU GTT (5096 MB)"
+        else
+            echo "options amdgpu gttsize=5096" > "$AMDGPU_CONF"
+            log_success "Persisted AMD iGPU GTT size (5096 MB) to $AMDGPU_CONF"
+            add_changed "AMD iGPU GTT memory allocation (5096 MB)"
+        fi
+    fi
+
+    # 2. Intel iGPU (i915 / Xe) Dynamic VRAM Allocation
+    if [[ -d /sys/module/i915 ]] || [[ -d /sys/module/xe ]]; then
+        INTEL_CONF="/etc/modprobe.d/i915.conf"
+        log_info "Intel iGPU driver detected. Enabling GuC/HuC hardware submission for max VRAM aperture..."
+        if [[ -f "$INTEL_CONF" ]] && grep -q "enable_guc=3" "$INTEL_CONF"; then
+            log_info "Intel iGPU GuC settings are already configured in $INTEL_CONF"
+            add_skipped "Intel iGPU VRAM tuning"
+        else
+            echo "options i915 enable_guc=3" > "$INTEL_CONF"
+            log_success "Persisted Intel iGPU GuC settings to $INTEL_CONF"
+            add_changed "Intel iGPU hardware submission & VRAM aperture tuning"
+        fi
+    fi
+
+    if [[ ! -d /sys/module/amdgpu ]] && [[ ! -d /sys/module/i915 ]] && [[ ! -d /sys/module/xe ]]; then
+        log_info "No integrated AMD or Intel GPU module active. Skipping iGPU tuning."
+        add_skipped "iGPU Memory Allocation (No active iGPU module found)"
     fi
 fi
 
