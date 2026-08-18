@@ -7,6 +7,7 @@
 #         • ColBERT ONNX  (semantic search / RAG)
 #         • Kokoro TTS  (text-to-speech, optional)
 #         • Parakeet TDT ASR  (speech-to-text, optional)
+#         • LFM 2.5 VL 1.6B  (vision tasks model & mmproj projector)
 #
 # Rules:
 #   - Idempotent (safe to run multiple times).
@@ -25,6 +26,7 @@ MODEL_DIR="$HERE/model"
 mkdir -p "$MODEL_DIR/granite"
 mkdir -p "$MODEL_DIR/audio/kokoro"
 mkdir -p "$MODEL_DIR/answerai-colbert-small-v1"
+mkdir -p "$MODEL_DIR/vision"
 
 # ── Helper: direct URL download ────────────────────────────────────────────────
 download_file() {
@@ -67,15 +69,15 @@ echo "║        LowaCode AI Tutor — Model Downloader         ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 
-# [1/4] Granite 4.0 H Tiny Q4_K_S — Single Resident LLM
-info "[1/4] Granite 4.0 H Tiny Q4_K_S (Single Resident LLM)"
+# [1/5] Granite 4.0 H Tiny Q4_K_S — Single Resident LLM
+info "[1/5] Granite 4.0 H Tiny Q4_K_S (Single Resident LLM)"
 hf_download \
     "mradermacher/granite-4.0-h-tiny-i1-GGUF" \
     "granite-4.0-h-tiny.i1-IQ4_XS.gguf" \
     "$MODEL_DIR/granite/granite-4.0-h-tiny.i1-IQ4_XS.gguf"
 
-# [2/4] ColBERT ONNX — semantic RAG search
-info "[2/4] ColBERT ONNX (answerai-colbert-small-v1)"
+# [2/5] ColBERT ONNX — semantic RAG search
+info "[2/5] ColBERT ONNX (answerai-colbert-small-v1)"
 for f in config.json model_int8.onnx special_tokens_map.json \
           tokenizer.json tokenizer_config.json vocab.txt; do
     download_file \
@@ -83,8 +85,8 @@ for f in config.json model_int8.onnx special_tokens_map.json \
         "$MODEL_DIR/answerai-colbert-small-v1/$f"
 done
 
-# [3/4] Kokoro TTS — text-to-speech (optional)
-info "[3/4] Kokoro TTS v1.0"
+# [3/5] Kokoro TTS — text-to-speech (optional)
+info "[3/5] Kokoro TTS v1.0"
 download_file \
     "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx" \
     "$MODEL_DIR/audio/kokoro/kokoro-v1.0.onnx"
@@ -92,11 +94,22 @@ download_file \
     "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin" \
     "$MODEL_DIR/audio/kokoro/voices-v1.0.bin"
 
-# [4/4] Parakeet TDT — speech-to-text (optional)
-info "[4/4] Parakeet TDT ASR"
+# [4/5] Parakeet TDT — speech-to-text (optional)
+info "[4/5] Parakeet TDT ASR"
 download_file \
     "https://huggingface.co/mudler/parakeet-cpp-gguf/resolve/main/tdt-0.6b-v2-q5_k.gguf" \
     "$MODEL_DIR/audio/tdt-0.6b-v2-q5_k.gguf"
+
+# [5/5] LFM 2.5 VL 1.6B — Vision Model & Multimodal Projector
+info "[5/5] LFM 2.5 VL 1.6B (Vision Model & Multimodal Projector)"
+hf_download \
+    "LiquidAI/LFM2.5-VL-1.6B-GGUF" \
+    "LFM2.5-VL-1.6B-Q4_0.gguf" \
+    "$MODEL_DIR/vision/LFM2.5-VL-1.6B-Q4_0.gguf"
+hf_download \
+    "LiquidAI/LFM2.5-VL-1.6B-GGUF" \
+    "mmproj-LFM2.5-VL-1.6b-Q8_0.gguf" \
+    "$MODEL_DIR/vision/mmproj-LFM2.5-VL-1.6b-Q8_0.gguf"
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
