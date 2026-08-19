@@ -11,7 +11,7 @@ Code Persona provides two specialized, interactive pair-programming workflows dr
 ### 1. Socratic Study Mode
 
 - **Purpose**: Interactive coding mentorship that guides the student toward understanding rather than handing them answers.
-- **Behavior**: Enforces the Professor LowaCode persona with a strict multi-step progression mandate (`Step N: [Focus]`), delivering a single step per turn with guiding questions and zero direct code block disclosures, forcing the user to write their own code before moving forward.
+- **Behavior**: Enforces the Professor LowaCode persona with a compact ~207-token system prompt containing step-progression rules, format mandate, and a single inline example. The prompt deliberately avoids multi-turn few-shot examples (which caused the model to hallucinate fake User/Assistant continuations) and instead uses a self-contained format demonstration.
 - **GBNF Grammar Restriction**: Utilizes a custom GBNF grammar (`STEP1_GBNF_GRAMMAR`) to constrain generated output into structured step headers, concise explanations, and explicit task sections, preventing formatting drift:
   ```bnf
   root ::= step-header "\n\n" explanation "\n\n" task-header "\n" task-body
@@ -114,9 +114,9 @@ The orchestrator uses the ColBERT model for semantic intent routing. Canonical i
 
 When the model uses tool-calling capabilities, ColBERT MaxSim scoring is applied between the user query and available tool specifications. A whitelist of core tools (`bash`, `execute_command`, `exec`, `read`, `write`, `edit`, `apply_patch`, `web_search`, `web_fetch`) is always retained, plus the top-k dynamically relevant tools are added based on semantic similarity.
 
-### System Prompt Pruning
+### System Prompt Design
 
-For long system prompts, the orchestrator chunks the prompt by Markdown headers, preserving core persona instructions while selecting only the top-k semantically relevant context sections via ColBERT scoring. This keeps the prompt within manageable token budgets.
+The Socratic system prompt is kept deliberately compact (~207 tokens / ~831 characters) to maximize the context window available for actual conversation history. Earlier iterations used a ~827-token prompt with 3-turn few-shot examples containing explicit `User:`/`Assistant:` role markers, which Granite 4.0 H-Tiny interpreted as real conversation history — causing it to hallucinate continuation turns. The current design uses a single self-contained example without role markers, achieving the same format compliance at 75% fewer tokens.
 
 ---
 

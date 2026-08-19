@@ -28,7 +28,7 @@ Through extensive benchmarking across Granite 4.0 H micro, Granite 4.0 H tiny, G
 
 ### Socratic Output Formatting & GBNF Grammar Restriction
 
-To guarantee strict compliance with the Socratic step-by-step tutoring methodology and prevent structural drift, the system integrates GBNF (GBNF Grammar) output restrictions (`STEP1_GBNF_GRAMMAR`). The grammar enforces structured output formats containing a step header (`### 🛠️ Step 1: ...`), concise explanation, and explicit task section (`**Your Task**: ...`):
+To guarantee strict compliance with the Socratic step-by-step tutoring methodology and prevent structural drift, the system integrates GBNF (GBNF Grammar) output restrictions (`STEP1_GBNF_GRAMMAR`). The grammar enforces structured output formats containing a dynamic step header (`### 🛠️ Step N: ...`), concise explanation, and explicit task section (`**Your Task**: ...`):
 ```bnf
 root ::= step-header "\n\n" explanation "\n\n" task-header "\n" task-body
 step-header ::= "### 🛠️ Step " [0-9]{1,3} ": " [^\n]{1,100}
@@ -36,6 +36,10 @@ explanation ::= [^\n]{1,100}
 task-header ::= "**Your Task**: "
 task-body ::= [^\n]{1,100}
 ```
+
+### System Prompt Compaction
+
+The Socratic system prompt was reduced from ~827 tokens to ~207 tokens (a 75% reduction) to prevent Granite 4.0 H-Tiny from hallucinating fake User/Assistant conversation continuations. The root cause was a 3-turn multi-turn few-shot example embedded in the system prompt using explicit `User:`/`Assistant:` role markers — the model interpreted these as real conversation history and generated continuation turns instead of responding to the actual user query. The fix replaced the multi-turn example with a single self-contained format demonstration that does not use role markers, achieving identical format compliance at a fraction of the token cost while freeing more context window for actual conversation history.
 
 A different setup was actually built in the [feature/dual-model-setup](https://github.com/Overwatch886/team-codewatch-adtc-2026-submission/tree/feature/dual-model-setup) branch in this repo which uses a dual model architecture but this setup was not chosen because of better generation speeds and model swapping latency. That setup though is more memory efficient and functions smoothly under a 6 GB RAM systemd cgroups memory limit.
 
